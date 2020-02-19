@@ -2290,7 +2290,8 @@ static int get_feature(int argc, char **argv, struct command *cmd, struct plugin
 		nvme_get_feature_length(cfg.feature_id, cfg.cdw11, &cfg.data_len);
 
 	if (cfg.data_len) {
-		if (posix_memalign(&buf, getpagesize(), cfg.data_len)) {
+		buf = malloc(cfg.data_len);
+		if (!buf) {
 			fprintf(stderr, "can not allocate feature payload\n");
 			err = -1;
 			goto close_fd;
@@ -2301,7 +2302,7 @@ static int get_feature(int argc, char **argv, struct command *cmd, struct plugin
 	err = nvme_get_features(fd, cfg.feature_id, cfg.namespace_id, cfg.sel, cfg.cdw11,
 			0, cfg.data_len, buf, &result);
 	if (!err)
-		;//nvme_feature_show_fields(cfg.feature_id, result, buf);
+		nvme_feature_show_fields(cfg.feature_id, result, buf, 0);
 	else
 		nvme_show_status("get-feature", err);
 
@@ -3122,8 +3123,8 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 
 	err = nvme_set_features(fd, cfg.feature_id, cfg.namespace_id, cfg.value,
 			       cfg.cdw12, cfg.save, 0, 0, cfg.data_len, buf, &result);
-	if (err)
-		;//nvme_feature_show_fields(cfg.feature_id, result, buf);
+	if (!err)
+		nvme_feature_show_fields(cfg.feature_id, result, buf, 0);
 	else
 		nvme_show_status("set-feature", err);
 
