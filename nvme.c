@@ -4801,7 +4801,7 @@ static int nvmf_discover(nvme_ctrl_t c, const struct nvme_fabrics_config *defcfg
 	if (raw)
 		save_discovery_log(log);
 	else if (!connect)
-		;/* FIXME: the display */
+		nvme_print_object(nvme_discovery_log_to_json(log, 0));
 	else if (connect) {
 		uint64_t numrec;
 		int i;

@@ -1606,16 +1606,20 @@ static json_object *nvme_feat_simple_to_json(__u8 fid, __u32 value,
 	return jf;
 }
 
+#if 0
 static json_object *nvme_feat_arbitration_to_json(__u32 value,
 	unsigned long flags)
 {
+	__u8 ab, lpw, mpw;
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_ARBITRATION, value, flags);
-	nvme_json_add_int(jf, "ab", NVME_FEAT_ARB_BURST(value));
-	nvme_json_add_int(jf, "lpw", NVME_FEAT_ARB_LPW(value));
-	nvme_json_add_int(jf, "mpw", NVME_FEAT_ARB_MPW(value));
-	nvme_json_add_int(jf, "hpw", NVME_FEAT_ARB_HPW(value));
+
+	nvme_feature_decode_arbitration(value, &ab, &lpw, &mpw, &hpw)
+	nvme_json_add_int(jf, "ab", ab);
+	nvme_json_add_int(jf, "lpw", lpw);
+	nvme_json_add_int(jf, "mpw", mpw);
+	nvme_json_add_int(jf, "hpw", hpw);
 
 	return jf;
 }
@@ -1624,10 +1628,13 @@ static json_object *nvme_feat_power_mgmt_to_json(__u32 value,
 	unsigned long flags)
 {
 	struct json_object *jf;
+	__u8 ps, wh;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_POWER_MGMT, value, flags);
-	nvme_json_add_int(jf, "ps", NVME_FEAT_PM_PS(value));
-	nvme_json_add_int(jf, "wh", NVME_FEAT_PM_WH(value));
+
+	nvme_feature_decode_power_mgmt(value, &ps, &wh);
+	nvme_json_add_int(jf, "ps", ps);
+	nvme_json_add_int(jf, "wh", wh);
 
 	return jf;
 }
@@ -1652,9 +1659,12 @@ static json_object *nvme_feat_lba_range_to_json(__u32 value,
 	struct nvme_lba_range_type *lbar, unsigned long flags)
 {
 	struct json_object *jf, *jlbars;
-	int i, num = NVME_FEAT_LBAR_NR(value);
+	__u8 num;
+	int i;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_LBA_RANGE, value, flags);
+
+	nvme_feature_decode_lba_range(value, &num);
 	nvme_json_add_int(jf, "num", num);
 
 	jlbars = nvme_json_new_array();
@@ -1676,11 +1686,15 @@ static json_object *nvme_feat_temp_thresh_to_json(__u32 value,
 	unsigned long flags)
 {
 	struct json_object *jf;
+	__u8 tmpsel, *thsel;
+	__u16 tmpth;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_TEMP_THRESH, value, flags);
-	nvme_json_add_int(jf, "tmpth", NVME_FEAT_TT_TMPTH(value));
-	nvme_json_add_int(jf, "tmpsel", NVME_FEAT_TT_TMPSEL(value));
-	nvme_json_add_int(jf, "thsel", NVME_FEAT_TT_THSEL(value));
+
+	nvme_feature_decode_temp_threshold(value, &tmpth, &tmpsel, &thsel);
+	nvme_json_add_int(jf, "tmpth", tmpth);
+	nvme_json_add_int(jf, "tmpsel", tmpsel);
+	nvme_json_add_int(jf, "thsel", thsel);
 
 	return jf;
 }
@@ -1689,10 +1703,14 @@ static json_object *nvme_feat_err_recovery_to_json(__u32 value,
 	unsigned long flags)
 {
 	struct json_object *jf;
+	__u16 tler;
+	bool dulbe;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_ERR_RECOVERY, value, flags);
-	nvme_json_add_int(jf, "tler", NVME_FEAT_ER_TLER(value));
-	nvme_json_add_bool(jf, "dulbe", NVME_FEAT_ER_DULBE(value));
+
+	nvme_feature_decode_error_recovery(value, &tler, &dulbe);
+	nvme_json_add_int(jf, "tler", tler);
+	nvme_json_add_bool(jf, "dulbe", dulbe);
 
 	return jf;
 }
@@ -1701,9 +1719,12 @@ static json_object *nvme_feat_volatile_wc_to_json(__u32 value,
 	unsigned long flags)
 {
 	struct json_object *jf;
+	bool wce;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_VOLATILE_WC, value, flags);
-	nvme_json_add_bool(jf, "wce", NVME_FEAT_VWC_WCE(value));
+
+	nvme_feature_decode_volatile_write_cache(value, &wce);
+	nvme_json_add_bool(jf, "wce", wce);
 
 	return jf;
 }
@@ -1714,8 +1735,10 @@ static json_object *nvme_feat_num_queues_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_NUM_QUEUES, value, flags);
-	nvme_json_add_int(jf, "nsqr", NVME_FEAT_NRQS_NSQR(value));
-	nvme_json_add_int(jf, "ncqr", NVME_FEAT_NRQS_NCQR(value));
+
+	nvme_feature_decode_number_of_queues(value, &nsqr, &ncqr);
+	nvme_json_add_int(jf, "nsqr", nsqr);
+	nvme_json_add_int(jf, "ncqr", ncqr);
 
 	return jf;
 }
@@ -1726,8 +1749,8 @@ static json_object *nvme_feat_irq_coalesce_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_IRQ_COALESCE, value, flags);
-	nvme_json_add_int(jf, "thr", NVME_FEAT_ICOAL_THR(value));
-	nvme_json_add_int(jf, "time", NVME_FEAT_ICOAL_TIME(value));
+	nvme_json_add_int(jf, "thr", thr);
+	nvme_json_add_int(jf, "time", time);
 
 	return jf;
 }
@@ -1738,8 +1761,8 @@ static json_object *nvme_feat_irq_config_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_IRQ_CONFIG, value, flags);
-	nvme_json_add_int(jf, "iv", NVME_FEAT_ICFG_IV(value));
-	nvme_json_add_bool(jf, "cd", NVME_FEAT_ICFG_CD(value));
+	nvme_json_add_int(jf, "iv", iv);
+	nvme_json_add_bool(jf, "cd", cd);
 
 	return jf;
 }
@@ -1750,7 +1773,7 @@ static json_object *nvme_feat_write_atomic_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_WRITE_ATOMIC, value, flags);
-	nvme_json_add_bool(jf, "dn", NVME_FEAT_WA_DN(value));
+	nvme_json_add_bool(jf, "dn", dn);
 
 	return jf;
 }
@@ -1761,14 +1784,14 @@ static json_object *nvme_feat_async_event_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_ASYNC_EVENT, value, flags);
-	nvme_json_add_int(jf, "smart", NVME_FEAT_AE_SMART(value));
-	nvme_json_add_bool(jf, "nan", NVME_FEAT_AE_NAN(value));
-	nvme_json_add_bool(jf, "fw", NVME_FEAT_AE_FW(value));
-	nvme_json_add_bool(jf, "telem", NVME_FEAT_AE_TELEM(value));
-	nvme_json_add_bool(jf, "ana", NVME_FEAT_AE_ANA(value));
-	nvme_json_add_bool(jf, "pla", NVME_FEAT_AE_PLA(value));
-	nvme_json_add_bool(jf, "lbas", NVME_FEAT_AE_LBAS(value));
-	nvme_json_add_bool(jf, "ega", NVME_FEAT_AE_EGA(value));
+	nvme_json_add_int(jf, "smart", smart);
+	nvme_json_add_bool(jf, "nan", nan);
+	nvme_json_add_bool(jf, "fw", fw);
+	nvme_json_add_bool(jf, "telem", telem);
+	nvme_json_add_bool(jf, "ana", ana);
+	nvme_json_add_bool(jf, "pla", pla);
+	nvme_json_add_bool(jf, "lbas", lbas);
+	nvme_json_add_bool(jf, "ega", ega);
 
 	return jf;
 }
@@ -1793,7 +1816,7 @@ static json_object *nvme_feat_auto_pst_to_json(__u32 value,
 	int i;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_AUTO_PST, value, flags);
-	nvme_json_add_bool(jf, "apste", NVME_FEAT_APST_APSTE(value));
+	nvme_json_add_bool(jf, "apste", apste);
 
 	japsts = nvme_json_new_array();
 	for (i = 0; i < 32; i++) {
@@ -1816,7 +1839,7 @@ static json_object *nvme_feat_host_mem_buf_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_HOST_MEM_BUF, value, flags);
-	nvme_json_add_bool(jf, "ehm", NVME_FEAT_HMEM_EHM(value));
+	nvme_json_add_bool(jf, "ehm", ehm);
 
 	return jf;
 }
@@ -1853,8 +1876,8 @@ static json_object *nvme_feat_hctm_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_HCTM, value, flags);
-	nvme_json_add_int(jf, "tmt2", NVME_FEAT_HCTM_TMT2(value));
-	nvme_json_add_int(jf, "tmt1", NVME_FEAT_HCTM_TMT1(value));
+	nvme_json_add_int(jf, "tmt2", tmt2);
+	nvme_json_add_int(jf, "tmt1", tmt1);
 
 	return jf;
 }
@@ -1865,7 +1888,7 @@ static json_object *nvme_feat_nopsc_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_NOPSC, value, flags);
-	nvme_json_add_bool(jf, "noppme", NVME_FEAT_NOPS_NOPPME(value));
+	nvme_json_add_bool(jf, "noppme", noppme);
 
 	return jf;
 }
@@ -1876,7 +1899,7 @@ static json_object *nvme_feat_rrl_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_RRL, value, flags);
-	nvme_json_add_int(jf, "rrl", NVME_FEAT_RRL_RRL(value));
+	nvme_json_add_int(jf, "rrl", rrl);
 
 	return jf;
 }
@@ -1893,7 +1916,7 @@ static json_object *nvme_feat_plm_config_to_json(__u32 value,
 	nvme_json_add_le64(jplm, "dwtintt", plm->dtwintt);
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_PLM_CONFIG, value, flags);
-	nvme_json_add_bool(jf, "plme", NVME_FEAT_PLM_PLME(value));
+	nvme_json_add_bool(jf, "plme", plme);
 	json_object_object_add(jf, "plmcfg", jplm);
 
 	return jf;
@@ -1905,7 +1928,7 @@ static json_object *nvme_feat_plm_window_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_PLM_WINDOW, value, flags);
-	nvme_json_add_int(jf, "ws", NVME_FEAT_PLMW_WS(value));
+	nvme_json_add_int(jf, "ws", ws);
 
 	return jf;
 }
@@ -1916,8 +1939,8 @@ static json_object *nvme_feat_lba_sts_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_LBA_STS_INTERVAL, value, flags);
-	nvme_json_add_int(jf, "lsiri", NVME_FEAT_LBAS_LSIRI(value));
-	nvme_json_add_int(jf, "lsipi", NVME_FEAT_LBAS_LSIPI(value));
+	nvme_json_add_int(jf, "lsiri", lsiri);
+	nvme_json_add_int(jf, "lsipi", lsipi);
 
 	return jf;
 }
@@ -1942,7 +1965,7 @@ static json_object *nvme_feat_sanitize_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_SANITIZE, value, flags);
-	nvme_json_add_bool(jf, "nodrm", NVME_FEAT_SC_NODRM(value));
+	nvme_json_add_bool(jf, "nodrm", nodrm);
 
 	return jf;
 }
@@ -1953,8 +1976,8 @@ static json_object *nvme_feat_endurance_evt_cfg_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_ENDURANCE_EVT_CFG, value, flags);
-	nvme_json_add_int(jf, "endgid", NVME_FEAT_EG_ENDGID(value));
-	nvme_json_add_int(jf, "endgcw", NVME_FEAT_EG_EGCW(value));
+	nvme_json_add_int(jf, "endgid", endgid);
+	nvme_json_add_int(jf, "endgcw", endgcw);
 
 	return jf;
 }
@@ -1965,7 +1988,7 @@ static json_object *nvme_feat_sw_progress_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_SW_PROGRESS, value, flags);
-	nvme_json_add_int(jf, "pbslc", NVME_FEAT_SPM_PBSLC(value));
+	nvme_json_add_int(jf, "pbslc", pbslc);
 
 	return jf;
 }
@@ -1973,7 +1996,7 @@ static json_object *nvme_feat_sw_progress_to_json(__u32 value,
 static json_object *nvme_feat_host_id_to_json(__u32 value,
 	uint8_t *hostid, unsigned long flags)
 {
-	bool exhid = NVME_FEAT_HOSTID_EXHID(value);
+	bool exhid = exhid );
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_HOST_ID, value, flags);
@@ -1993,9 +2016,9 @@ static json_object *nvme_feat_resv_mask_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_RESV_MASK, value, flags);
-	nvme_json_add_bool(jf, "regpre", NVME_FEAT_RM_REGPRE(value));
-	nvme_json_add_bool(jf, "resrel", NVME_FEAT_RM_RESREL(value));
-	nvme_json_add_bool(jf, "respre", NVME_FEAT_RM_RESPRE(value));
+	nvme_json_add_bool(jf, "regpre", regpre);
+	nvme_json_add_bool(jf, "resrel", resrel);
+	nvme_json_add_bool(jf, "respre", respre);
 
 	return jf;
 }
@@ -2006,7 +2029,7 @@ static json_object *nvme_feat_resv_persist_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_RESV_PERSIST, value, flags);
-	nvme_json_add_bool(jf, "ptpl", NVME_FEAT_RP_PTPL(value));
+	nvme_json_add_bool(jf, "ptpl", ptpl);
 
 	return jf;
 }
@@ -2017,17 +2040,19 @@ static json_object *nvme_feat_write_protect_to_json(__u32 value,
 	struct json_object *jf;
 
 	jf = nvme_feat_simple_to_json(NVME_FEAT_FID_WRITE_PROTECT, value, flags);
-	nvme_json_add_int(jf, "wps", NVME_FEAT_WP_WPS(value));
+	nvme_json_add_int(jf, "wps", wps);
 
 	return jf;
 }
+#endif
 
 struct json_object *nvme_feature_to_json(__u8 fid, __u32 value, unsigned len,
 	void *data, unsigned long flags)
 {
 	if (!(flags & NVME_JSON_DECODE_COMPLEX))
 		return nvme_feat_simple_to_json(fid, value, flags);
-
+	return NULL;
+#if 0
 	switch (fid) {
 	case NVME_FEAT_FID_ARBITRATION:
 		return nvme_feat_arbitration_to_json(value, flags);
@@ -2090,6 +2115,7 @@ struct json_object *nvme_feature_to_json(__u8 fid, __u32 value, unsigned len,
 	default:
 		return NULL;
 	}
+#endif
 }
 
 static void nvme_json_add_id_ctrl_psd_human(struct json_object *j,
