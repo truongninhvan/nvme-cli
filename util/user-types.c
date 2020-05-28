@@ -411,7 +411,7 @@ const char *nvme_status_to_string(int status, bool fabrics)
 	case NVME_SCT_CMD_SPECIFIC:
 		if (sc < ARRAY_SIZE(cmd_spec_status))
 			s = ARGSTR(cmd_spec_status, sc);
-		 else if (fabrics)
+		else if (fabrics)
 			s = ARGSTR(nvmf_status, sc);
 		else
 			s = ARGSTR(nvm_status, sc);

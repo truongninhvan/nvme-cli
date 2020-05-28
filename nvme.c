@@ -25,7 +25,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#include <uuid.h>
+#include <uuid/uuid.h>
 
 #include "nvme.h"
 #include "plugin.h"
@@ -172,10 +172,13 @@ static int open_dev(char *dev)
 	fd = err;
 
 	err = fstat(fd, &nvme_stat);
-	if (err < 0)
+	if (err < 0) {
+		close(fd);
 		goto perror;
+	}
 	if (!S_ISCHR(nvme_stat.st_mode) && !S_ISBLK(nvme_stat.st_mode)) {
 		fprintf(stderr, "%s is not a block or character device\n", dev);
+		close(fd);
 		return -ENODEV;
 	}
 	return fd;
@@ -460,6 +463,7 @@ static int get_ana_log(int argc, char **argv, struct command *cmd,
 	int err, fd;
 	size_t len;
 	void *log;
+	bool huge = false;
 
 	struct config {
 		char *output_format;
@@ -488,7 +492,7 @@ static int get_ana_log(int argc, char **argv, struct command *cmd,
 	if (err)
 		goto close_fd;
 
-	log = malloc(len);
+	log = nvme_alloc(len, &huge);
 	if (!log) {
 		perror("malloc");
 		err = -1;
@@ -503,7 +507,8 @@ static int get_ana_log(int argc, char **argv, struct command *cmd,
 		nvme_show_ana_log(log, devicename, flags, len);
 	else
 		nvme_show_status("ana-log", err);
-	free(log);
+
+	nvme_free(log, huge);
 close_fd:
 	close(fd);
 ret:
@@ -567,16 +572,16 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd, struct 
 	}
 
 	if (cfg.host_gen)
-		nvme_get_new_host_telemetry(fd, &log);
+		err = nvme_get_new_host_telemetry(fd, &log);
 	else if (cfg.ctrl_init)
-		nvme_get_ctrl_telemetry(fd, true, &log);
+		err = nvme_get_ctrl_telemetry(fd, true, &log);
 	else
-		nvme_get_host_telemetry(fd, &log);
+		err = nvme_get_host_telemetry(fd, &log);
 
-	if (!err)
-		;
-	else
+	if (err)
 		nvme_show_status("get-telemetry-log", err);
+	else
+		;
 
 	free(log);
 	close(output);
@@ -934,7 +939,6 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		nvme_show_status("log-page", err);
 
 	nvme_free(log, huge);
-
 close_fd:
 	close(fd);
 ret:
@@ -1127,17 +1131,16 @@ static int delete_ns(int argc, char **argv, struct command *cmd, struct plugin *
 	if (fd < 0)
 		goto ret;
 
-	if (S_ISBLK(nvme_stat.st_mode)) {
+	if (!cfg.namespace_id) {
 		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
+		if (cfg.namespace_id == 0) {
+			err = -EINVAL;
+			goto close_fd;
+		}
+		else if (cfg.namespace_id < 0) {
 			err = cfg.namespace_id;
 			goto close_fd;
 		}
-	} else if (!cfg.namespace_id) {
-		fprintf(stderr, "%s: namespace-id parameter required\n",
-						cmd->name);
-		err = -EINVAL;
-		goto close_fd;
 	}
 
 	err = nvme_ns_mgmt_delete(fd, cfg.namespace_id);
@@ -1185,12 +1188,8 @@ static int nvme_attach_ns(int argc, char **argv, int attach, const char *desc, s
 	}
 
 	num = argconfig_parse_comma_sep_array(cfg.cntlist, list, 2047);
-	if (num <= 0) {
-		fprintf(stderr, "%s: controller id list is required\n",
-						cmd->name);
-		err = -EINVAL;
-		goto close_fd;
-	}
+	if (num <= 0)
+		fprintf(stderr, "warning: empty controller-id list will result in no actual change in namespace attachment\n");
 
 	for (i = 0; i < num; i++)
 		ctrlist[i] = (uint16_t)list[i];
@@ -1497,7 +1496,6 @@ static void nvme_show_list(nvme_root_t r, unsigned long flags)
 			printf("\n");
 		}
 	}
-
 }
 
 static int list_subsys(int argc, char **argv, struct command *cmd,
@@ -1594,7 +1592,6 @@ static int list(int argc, char **argv, struct command *cmd, struct plugin *plugi
 		flags |= 0;
 
 	r = nvme_scan();
-
 	if (r) {
 		nvme_show_list(r, flags);
 		nvme_free_tree(r);
@@ -1789,17 +1786,18 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	if (cfg.human_readable)
 		flags |= VERBOSE;
 
-	if (!cfg.namespace_id && S_ISBLK(nvme_stat.st_mode)) {
+	if (!cfg.namespace_id) {
 		cfg.namespace_id = nvme_get_nsid(fd);
 		if (cfg.namespace_id < 0) {
 			err = cfg.namespace_id;
 			goto close_fd;
 		}
-	} else if (!cfg.namespace_id) {
-		fprintf(stderr,
-			"Error: requesting namespace-id from non-block device\n");
-		err = -ENOTBLK;
-		goto close_fd;
+		else if (!cfg.namespace_id) {
+			fprintf(stderr,
+				"Error: requesting namespace-id from non-block device\n");
+			err = -ENOTBLK;
+			goto close_fd;
+		}
 	}
 
 	if (cfg.force)
@@ -2759,7 +2757,7 @@ static int get_property(int argc, char **argv, struct command *cmd, struct plugi
 		goto ret;
 
 	if (cfg.offset == -1) {
-		fprintf(stderr, "offset required param");
+		fprintf(stderr, "offset required param\n");
 		err = -EINVAL;
 		goto close_fd;
 	}
@@ -2805,12 +2803,12 @@ static int set_property(int argc, char **argv, struct command *cmd, struct plugi
 		goto ret;
 
 	if (cfg.offset == -1) {
-		fprintf(stderr, "offset required param");
+		fprintf(stderr, "offset required param\n");
 		err = -EINVAL;
 		goto close_fd;
 	}
 	if (cfg.value == -1) {
-		fprintf(stderr, "value required param");
+		fprintf(stderr, "value required param\n");
 		err = -EINVAL;
 		goto close_fd;
 	}
@@ -2917,11 +2915,13 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 		 * format of all namespaces.
 		 */
 		cfg.namespace_id = NVME_NSID_ALL;
-	} else if (S_ISBLK(nvme_stat.st_mode)) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
-			goto close_fd;
+	} else {
+		if (!cfg.namespace_id) {
+			cfg.namespace_id = nvme_get_nsid(fd);
+			if (cfg.namespace_id < 0) {
+				err = cfg.namespace_id;
+				goto close_fd;
+			}
 		}
 	}
 
@@ -2961,6 +2961,9 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 			}
 		} else  if (cfg.lbaf == 0xff)
 			cfg.lbaf = prev_lbaf;
+	}
+	else {
+		if (cfg.lbaf == 0xff) cfg.lbaf = 0;
 	}
 
 	/* ses & pi checks set to 7 for forward-compatibility */
@@ -3588,7 +3591,7 @@ static int flush(int argc, char **argv, struct command *cmd, struct plugin *plug
 	if (fd < 0)
 		goto ret;
 
-	if (S_ISBLK(nvme_stat.st_mode)) {
+	if (!cfg.namespace_id) {
 		cfg.namespace_id = nvme_get_nsid(fd);
 		if (cfg.namespace_id < 0) {
 			err = cfg.namespace_id;
@@ -4562,8 +4565,9 @@ static int passthru(int argc, char **argv, bool admin, const char *desc, struct 
 	if (cfg.metadata_len) {
 		metadata = malloc(cfg.metadata_len);
 		if (!metadata) {
-			fprintf(stderr, "can not allocate metadata "
-					"payload: %s\n", strerror(errno));
+			fprintf(stderr,
+				"can not allocate metadata payload: %s\n",
+				strerror(errno));
 			err = -1;
 			goto close_wfd;
 		}
@@ -4677,7 +4681,7 @@ static int admin_passthru(int argc, char **argv, struct command *cmd, struct plu
 
 static int gen_hostnqn_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
 {
-#ifdef LIBUUIDX
+#ifdef LIBUUID
 	uuid_t uuid;
 	char uuid_str[37]; /* e.g. 1b4e28ba-2fa1-11d2-883f-0016d3cca427 + \0 */
 
@@ -4942,11 +4946,11 @@ int discover(const char *desc, int argc, char **argv, bool connect)
 	char *device = NULL;
 
 	OPT_ARGS(opts) = {
-		OPT_LIST("device",     'd', &device,     "use existing discovery controller device"),
+		OPT_STRING("device",   'd', "DEV", &device, "use existing discovery controller device"),
 		NVMF_OPTS(cfg),
-		OPT_FILE("raw",        'r', &raw,        "save raw output to file"),
-		OPT_FLAG("persistent", 'p', &persistent, "persistent discovery connection"),
-		OPT_FLAG("quiet",      'S', &quiet,      "suppress already connected errors"),
+		OPT_FILE("raw",        'r', &raw,           "save raw output to file"),
+		OPT_FLAG("persistent", 'p', &persistent,    "persistent discovery connection"),
+		OPT_FLAG("quiet",      'S', &quiet,         "suppress already connected errors"),
 		OPT_END()
 	};
 
