@@ -295,7 +295,7 @@ void nvme_show_error_log(struct nvme_error_log_page *err_log, int entries,
 	nvme_print_object(nvme_error_log_to_json(err_log, entries, flags));
 }
 
-void nvme_show_resv_report(struct nvme_reservation_status *status, int bytes,
+void nvme_show_resv_report(struct nvme_resv_status *status, int bytes,
 	__u32 cdw11, enum nvme_print_flags flags)
 {
 	nvme_print_object(nvme_resv_report_to_json(status, cdw11 & 1, flags));
@@ -3813,7 +3813,7 @@ static int resv_report(int argc, char **argv, struct command *cmd, struct plugin
 	const char *eds = "request extended data structure";
 	const char *raw = "dump output in binary format";
 
-	struct nvme_reservation_status *status;
+	struct nvme_resv_status *status;
 	enum nvme_print_flags flags;
 	int err, fd;
 

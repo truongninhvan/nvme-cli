@@ -3242,8 +3242,8 @@ static struct json_object *nvme_id_ns_granularity_desc_to_json(
 {
 	struct json_object *jgran = nvme_json_new_object(flags);
 
-	nvme_json_add_le64(jgran, "nszeg", gran->namespace_size_granularity);
-	nvme_json_add_le64(jgran, "ncapg", gran->namespace_capacity_granularity);
+	nvme_json_add_le64(jgran, "nszegran", gran->nszegran);
+	nvme_json_add_le64(jgran, "ncapgran", gran->ncapgran);
 
 	return jgran;
 }
@@ -3277,12 +3277,12 @@ static json_object *nvme_nvmset_attr_to_json(
 {
 	struct json_object *jattr = nvme_json_new_object(flags);
 
-	nvme_json_add_le16(jattr, "nvmsetid", attr->id);
-	nvme_json_add_le16(jattr, "egi", attr->endurance_group_id);
-	nvme_json_add_le32(jattr, "r4krt", attr->random_4k_read_typical);
-	nvme_json_add_le32(jattr, "ows", attr->opt_write_size);
-	nvme_json_add_int128(jattr, "tnvmsetcap", attr->total_nvmset_cap);
-	nvme_json_add_int128(jattr, "unvmsetcap", attr->unalloc_nvmset_cap);
+	nvme_json_add_le16(jattr, "nvmsetid", attr->nvmsetid);
+	nvme_json_add_le16(jattr, "endgit", attr->endgid);
+	nvme_json_add_le32(jattr, "rr4kt", attr->rr4kt);
+	nvme_json_add_le32(jattr, "ows", attr->ows);
+	nvme_json_add_int128(jattr, "tnvmsetcap", attr->tnvmsetcap);
+	nvme_json_add_int128(jattr, "unvmsetcap", attr->unvmsetcap);
 
 	return jattr;
 }
@@ -4183,7 +4183,7 @@ static struct json_object *nvme_resv_ctrl_ext_to_json(
 }
 
 struct json_object *nvme_resv_report_to_json(
-	struct nvme_reservation_status *status, bool ext,
+	struct nvme_resv_status *status, bool ext,
 	unsigned long flags)
 {
 	int i, regctl = status->regctl[0] | (status->regctl[1] << 8);
