@@ -7,7 +7,7 @@
 
 #include <json-c/json.h>
 
-#include "libnvme.h"
+#include <libnvme.h>
 #include "nvme.h"
 
 enum nvme_print_flags {
@@ -178,18 +178,6 @@ static inline uint64_t int48_to_long(__u8 *data)
 	return (uint64_t)unalign_int((uint8_t *)data, 6);
 }
 
-static inline __u64 read64(void *addr)
-{
-	__le32 *p = addr;
-	return le32_to_cpu(*p) | ((__u64)le32_to_cpu(*(p + 1)) << 32);
-}
-
-static inline __u32 read32(void *addr)
-{
-	__le32 *p = addr;
-	return le32_to_cpu(*p);
-}
-
 static inline void nvme_json_add_str_len(struct json_object *j, const char *n,
 					 const char *v, int l, unsigned long flags)
 {
@@ -235,14 +223,14 @@ static inline void nvme_json_add_flag(struct json_object *j, const char *n,
 static inline void nvme_json_add_le64_ptr(struct json_object *j, const char *n,
 					  void *addr)
 {
-	__u64 v = read64(addr);
+	__u64 v = nvme_mmio_read64(addr);
 	nvme_json_add_int64(j, n, v);
 }
 
 static inline void nvme_json_add_le32_ptr(struct json_object *j, const char *n,
 					  void *addr)
 {
-	__u32 v = read32(addr);
+	__u32 v = nvme_mmio_read32(addr);
 	nvme_json_add_int(j, n, v);
 }
 

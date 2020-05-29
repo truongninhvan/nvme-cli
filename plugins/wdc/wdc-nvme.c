@@ -755,78 +755,71 @@ static long double int128_to_double(__u8 *data)
 
 static int wdc_get_pci_ids(uint32_t *device_id, uint32_t *vendor_id)
 {
-	int fd, ret = -1;
-	char *block, path[512], *id;
+	char vid[256], did[256], id[32];
+	nvme_ctrl_t c = NULL;
+	nvme_ns_t n = NULL;
+	int fd, ret;
 
-	id = calloc(1, 32);
-	if (!id) {
-		fprintf(stderr, "ERROR : WDC : %s : calloc failed\n", __func__);
+	c = nvme_scan_ctrl(devicename);
+	if (c) {
+		snprintf(vid, sizeof(vid), "%s/device/vendor",
+			nvme_ctrl_get_sysfs_dir(c));
+		snprintf(did, sizeof(did), "%s/device/device",
+			nvme_ctrl_get_sysfs_dir(c));
+		nvme_free_ctrl(c);
+	} else {
+		n = nvme_scan_namespace(devicename);
+		if (!n) {
+			fprintf(stderr, "Unable to find %s\n", devicename);
+			return -1;
+		}
+
+		snprintf(vid, sizeof(vid), "%s/device/device/vendor",
+			nvme_ns_get_sysfs_dir(n));
+		snprintf(did, sizeof(did), "%s/device/device/device",
+			nvme_ns_get_sysfs_dir(n));
+		nvme_free_ns(n);
+	}
+
+	fd = open(vid, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "ERROR : WDC : %s : Open vendor file failed\n", __func__);
 		return -1;
 	}
 
-	block = (char *)devicename;
-
-	/* read the vendor ID from sys fs  */
-	sprintf(path, "/sys/class/nvme/%s/device/vendor", block);
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		sprintf(path, "/sys/class/misc/%s/device/vendor", block);
-		fd = open(path, O_RDONLY);
-	}
-	if (fd < 0) {
-		fprintf(stderr, "ERROR : WDC : %s : Open vendor file failed\n", __func__);
-		ret = -1;
-		goto free_id;
-	}
-
 	ret = read(fd, id, 32);
+	close(fd);
+
 	if (ret < 0) {
 		fprintf(stderr, "%s: Read of pci vendor id failed\n", __func__);
-		ret = -1;
-		goto close_fd;
-	} else {
-		if (id[strlen(id) - 1] == '\n')
-			id[strlen(id) - 1] = '\0';
-
-		/* convert the device id string to an int  */
-		*vendor_id = (int)strtol(&id[2], NULL, 16);
-		ret = 0;
+		return -1;
 	}
 
-	/* read the device ID from sys fs */
-	sprintf(path, "/sys/class/nvme/%s/device/device", block);
+	if (id[strlen(id) - 1] == '\n')
+		id[strlen(id) - 1] = '\0';
 
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		sprintf(path, "/sys/class/misc/%s/device/device", block);
-		fd = open(path, O_RDONLY);
-	}
+	*vendor_id = strtol(id, NULL, 0);
+	ret = 0;
+
+	fd = open(did, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "ERROR : WDC : %s : Open device file failed\n", __func__);
-		ret = -1;
-		goto close_fd;
+		return -1;
 	}
 
 	ret = read(fd, id, 32);
+	close(fd);
+
 	if (ret < 0) {
 		fprintf(stderr, "%s: Read of pci device id failed\n", __func__);
-		ret = -1;
-	} else {
-		if (id[strlen(id) - 1] == '\n')
-			id[strlen(id) - 1] = '\0';
-
-		/* convert the device id string to an int  */
-		*device_id = strtol(&id[2], NULL, 16);
-		ret = 0;
+		return -1;
 	}
 
-close_fd:
-	close(fd);
-free_id:
-	free(block);
-	free(id);
-	return ret;
+	if (id[strlen(id) - 1] == '\n')
+		id[strlen(id) - 1] = '\0';
+
+	*device_id = strtol(id, NULL, 0);
+	return 0;
 }
 
 static bool wdc_check_device(int fd)
