@@ -5,13 +5,14 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include "common.h"
 #include "nvme.h"
 #include "json.h"
 #include "plugin.h"
 
 #include "argconfig.h"
 #include "suffix.h"
+
+#include <ccan/minmax/minmax.h>
 
 #define CREATE_CMD
 #include "intel-nvme.h"
@@ -940,19 +941,19 @@ static void print_intel_nlog(struct intel_vu_nlog *intel_nlog)
 	       intel_nlog->nlogbufnummax, intel_nlog->coreselected);
 }
 
-static int read_entire_cmd(struct nvme_passthru_cmd *cmd, int total_size,
+static int read_entire_cmd(struct nvme_passthru_cmd *cmd, size_t total_size,
 			   const size_t max_tfer, int out_fd, int ioctl_fd,
 			   __u8 *buf)
 {
-	int err = 0;
 	size_t dword_tfer = 0;
+	int err = 0;
 
 	dword_tfer = min(max_tfer, total_size);
 	while (total_size > 0) {
 		err = nvme_submit_admin_passthru(ioctl_fd, cmd, NULL);
 		if (err) {
 			fprintf(stderr,
-				"failed on cmd.data_len %u cmd.cdw13 %u cmd.cdw12 %x cmd.cdw10 %u err %x remaining size %d\n",
+				"failed on cmd.data_len %u cmd.cdw13 %u cmd.cdw12 %x cmd.cdw10 %u err %x remaining size %zu\n",
 				cmd->data_len, cmd->cdw13, cmd->cdw12,
 				cmd->cdw10, err, total_size);
 			goto out;
@@ -1023,8 +1024,8 @@ static int get_internal_log_old(__u8 *buf, int output, int fd,
 {
 	struct intel_vu_log *intel;
 	int err = 0;
-	const int dwmax = 0x400;
-	const int dmamax = 0x1000;
+	const __u32 dwmax = 0x400;
+	const __u32 dmamax = 0x1000;
 
 	intel = (struct intel_vu_log *)buf;
 
@@ -1173,7 +1174,7 @@ static int get_internal_log(int argc, char **argv, struct command *command,
 					continue;
 				cmd.cdw13 = ad[i].coreoffset;
 				cmd.cdw10 = 0x400;
-				cmd.data_len = min(0x400, ad[i].assertsize) * 4;
+				cmd.data_len = min(0x400u, ad[i].assertsize) * 4;
 				err = read_entire_cmd(&cmd, ad[i].assertsize,
 						      0x400, output, fd, buf);
 				if (err)
@@ -1195,7 +1196,7 @@ static int get_internal_log(int argc, char **argv, struct command *command,
 					print_intel_nlog(intel_nlog);
 				cmd.cdw13 = 0x400;
 				cmd.cdw10 = 0x400;
-				cmd.data_len = min(0x1000, intel_nlog->nlogbytesize);
+				cmd.data_len = min(0x1000u, intel_nlog->nlogbytesize);
 				err = read_entire_cmd(&cmd, intel_nlog->nlogbytesize / 4,
 						      0x400, output, fd, buf);
 				if (err)

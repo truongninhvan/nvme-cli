@@ -27,6 +27,9 @@
 
 #include <uuid/uuid.h>
 
+#include <ccan/minmax/minmax.h>
+#include <ccan/array_size/array_size.h>
+
 #include "nvme.h"
 #include "plugin.h"
 #include "argconfig.h"
@@ -37,11 +40,6 @@
 
 #define CREATE_CMD
 #include "builtin.h"
-
-#define ARRAY_SIZE(x) sizeof(x) / sizeof(*x)
-
-#define min(x, y) (x < y) ? x : y
-#define max(x, y) (x < y) ? y : x
 
 static struct stat nvme_stat;
 const char *devicename;
@@ -709,7 +707,7 @@ static int get_error_log(int argc, char **argv, struct command *cmd, struct plug
 
 	OPT_ARGS(opts) = {
 		OPT_FMT("output-format", 'o', &cfg.output_format, output_format),
-		OPT_UINT("log-entries",  'e', &cfg.log_entries,   log_entries),
+		OPT_SHRT("log-entries",  'e', &cfg.log_entries,   log_entries),
 		OPT_FLAG("raw-binary",   'b', &cfg.raw_binary,    raw),
 		OPT_END()
 	};
@@ -736,7 +734,7 @@ static int get_error_log(int argc, char **argv, struct command *cmd, struct plug
 		goto close_fd;
 	}
 
-	cfg.log_entries = min(cfg.log_entries, ctrl.elpe + 1);
+	cfg.log_entries = min(cfg.log_entries, ctrl.elpe + 1u);
 	log = calloc(cfg.log_entries, sizeof(struct nvme_error_log_page));
 	if (!log) {
 		fprintf(stderr, "could not alloc buffer for error log\n");
@@ -3538,7 +3536,7 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 	nc = argconfig_parse_comma_sep_array(cfg.ctx_attrs, ctx_attrs, ARRAY_SIZE(ctx_attrs));
 	nb = argconfig_parse_comma_sep_array(cfg.blocks, nlbs, ARRAY_SIZE(nlbs));
 	ns = argconfig_parse_comma_sep_array_long(cfg.slbas, slbas, ARRAY_SIZE(slbas));
-	nr = max(nc, max(nb, ns));
+	nr = max(nc, (uint16_t)max(nb, ns));
 	if (!nr || nr > 256) {
 		fprintf(stderr, "No range definition provided\n");
 		err = -EINVAL;

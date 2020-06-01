@@ -5,7 +5,6 @@
 #define MEMBLAZE_NVME
 
 #include "cmd.h"
-#include "common.h"
 
 #include <ctype.h>
 #include <unistd.h>

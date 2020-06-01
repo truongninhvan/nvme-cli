@@ -163,9 +163,19 @@ struct json_object *nvme_json_new_bool_terse(bool v);
 #define bit_set(a, b) !!(a[b / 8] & (b % 8))
 #define is_set(v, f) !!(v & f)
 
+static inline long double int128_to_double(__u8 *data)
+{
+	long double ret = 0;
+	int i;
+
+	for (i = 15; i >= 0; i--)
+		ret = ret * 256 + data[i];
+	return ret;
+}
+
 static inline __u64 unalign_int(uint8_t *data, int len)
 {
-	__u32 ret = 0;
+	__u64 ret = 0;
 	int i;
 
 	for (i = len - 1; i >= 0; i--)

@@ -8,6 +8,8 @@
 #include <json-c/json.h>
 #include <uuid/uuid.h>
 
+#include <ccan/array_size/array_size.h>
+
 #include "user-types.h"
 
 static const char dash[101] = {[0 ... 99] = '-'};
@@ -57,7 +59,6 @@ void d_raw(unsigned char *buf, unsigned len)
 		putchar(*(buf+i));
 }
 
-#define ARRAY_SIZE(x) sizeof(x) / sizeof(*x)
 #define ARGSTR(s, i) arg_str(s, ARRAY_SIZE(s), i)
 
 static const char *arg_str(const char * const *strings,
@@ -1021,12 +1022,8 @@ static int display_int128(struct json_object *o, struct printbuf *p,
 	int l, int f)
 {
 	uint8_t *s = (uint8_t *)json_object_get_string(o);
-	long double result = 0;
+	long double result = int128_to_double(s);
 	char buf[40];
-	int i;
-
-	for (i = 15; i >= 0; i--)
-		result = result * 256 + s[i];
 
 	snprintf(buf, sizeof(buf), "%.0Lf", result);
 	return printbuf_memappend(p, buf, strlen(buf));

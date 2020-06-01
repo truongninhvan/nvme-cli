@@ -29,7 +29,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "common.h"
 #include "nvme.h"
 #include "plugin.h"
 #include "json.h"
@@ -37,6 +36,9 @@
 #include "argconfig.h"
 #include "suffix.h"
 #include <sys/ioctl.h>
+
+#include <ccan/minmax/minmax.h>
+
 #define CREATE_CMD
 #include "wdc-nvme.h"
 #include "wdc-utils.h"
@@ -89,15 +91,15 @@
 #define WDC_DRIVE_CAP_DRIVE_LOG				0x0000000000000400
 #define WDC_DRIVE_CAP_CRASH_DUMP			0x0000000000000800
 #define WDC_DRIVE_CAP_PFAIL_DUMP			0x0000000000001000
-#define WDC_DRIVE_CAP_FW_ACTIVATE_HISTORY   0x0000000000002000
-#define WDC_DRIVE_CAP_CLEAR_FW_ACT_HISTORY  0x0000000000004000
-#define WDC_DRVIE_CAP_DISABLE_CTLR_TELE_LOG 0x0000000000008000
-#define WDC_DRIVE_CAP_REASON_ID             0x0000000000010000
-#define WDC_DRIVE_CAP_LOG_PAGE_DIR          0x0000000000020000
-#define WDC_DRIVE_CAP_NS_RESIZE             0x0000000000040000
-#define WDC_DRIVE_CAP_INFO                  0x0000000000080000
+#define WDC_DRIVE_CAP_FW_ACTIVATE_HISTORY		0x0000000000002000
+#define WDC_DRIVE_CAP_CLEAR_FW_ACT_HISTORY		0x0000000000004000
+#define WDC_DRVIE_CAP_DISABLE_CTLR_TELE_LOG		0x0000000000008000
+#define WDC_DRIVE_CAP_REASON_ID				0x0000000000010000
+#define WDC_DRIVE_CAP_LOG_PAGE_DIR			0x0000000000020000
+#define WDC_DRIVE_CAP_NS_RESIZE				0x0000000000040000
+#define WDC_DRIVE_CAP_INFO				0x0000000000080000
 
-#define WDC_DRIVE_CAP_DRIVE_ESSENTIALS      0x0000000100000000
+#define WDC_DRIVE_CAP_DRIVE_ESSENTIALS			0x0000000100000000
 #define WDC_DRIVE_CAP_DUI_DATA				0x0000000200000000
 #define WDC_SN730B_CAP_VUC_LOG				0x0000000400000000
 #define WDC_DRIVE_CAP_SN340_DUI				0x0000000800000000
@@ -149,7 +151,7 @@
 /* Capture Device Unit Info */
 #define WDC_NVME_CAP_DUI_HEADER_SIZE			0x400
 #define WDC_NVME_CAP_DUI_OPCODE				0xFA
-#define WDC_NVME_CAP_DUI_DISABLE_IO         0x01
+#define WDC_NVME_CAP_DUI_DISABLE_IO			0x01
 #define WDC_NVME_DUI_MAX_SECTION			0x3A
 #define WDC_NVME_DUI_MAX_SECTION_V2			0x26
 #define WDC_NVME_DUI_MAX_SECTION_V3			0x23
@@ -183,7 +185,7 @@
 #define WDC_NVME_PF_CRASH_DUMP_SUBCMD			0x06
 
 /* Drive Log */
-#define WDC_NVME_DRIVE_LOG_SIZE_OPCODE			 WDC_NVME_CAP_DIAG_CMD_OPCODE
+#define WDC_NVME_DRIVE_LOG_SIZE_OPCODE			WDC_NVME_CAP_DIAG_CMD_OPCODE
 #define WDC_NVME_DRIVE_LOG_SIZE_DATA_LEN		WDC_NVME_LOG_SIZE_DATA_LEN
 #define WDC_NVME_DRIVE_LOG_SIZE_NDT			0x02
 #define WDC_NVME_DRIVE_LOG_SIZE_CMD			0x20
@@ -250,20 +252,20 @@
 
 /* CA Log Page */
 #define WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE		0xCA
-#define WDC_FB_CA_LOG_BUF_LEN					0x80
-#define WDC_BD_CA_LOG_BUF_LEN					0x9C
+#define WDC_FB_CA_LOG_BUF_LEN				0x80
+#define WDC_BD_CA_LOG_BUF_LEN				0x9C
 
 /* C0 EOL Status Log Page */
 #define WDC_NVME_GET_EOL_STATUS_LOG_OPCODE		0xC0
-#define WDC_NVME_EOL_STATUS_LOG_LEN				0x200
+#define WDC_NVME_EOL_STATUS_LOG_LEN			0x200
 
 /* CB - FW Activate History Log Page */
-#define WDC_NVME_GET_FW_ACT_HISTORY_LOG_ID      0xCB
-#define WDC_FW_ACT_HISTORY_LOG_BUF_LEN          0x3d0
+#define WDC_NVME_GET_FW_ACT_HISTORY_LOG_ID	0xCB
+#define WDC_FW_ACT_HISTORY_LOG_BUF_LEN		0x3d0
 
 /* D0 Smart Log Page */
-#define WDC_NVME_GET_VU_SMART_LOG_OPCODE		0xD0
-#define WDC_NVME_VU_SMART_LOG_LEN				0x200
+#define WDC_NVME_GET_VU_SMART_LOG_OPCODE	0xD0
+#define WDC_NVME_VU_SMART_LOG_LEN		0x200
 
 /* Log Page Directory defines  */
 #define NVME_LOG_PERSISTENT_EVENT               0x0D
@@ -326,37 +328,34 @@
 #define WDC_DE_DESTN_SPI				1
 #define WDC_DE_DUMPTRACE_DESTINATION			6
 
-typedef enum _NVME_FEATURES_SELECT
-{
-    FS_CURRENT                      = 0,
-    FS_DEFAULT                      = 1,
-    FS_SAVED                        = 2,
-    FS_SUPPORTED_CAPBILITIES        = 3
+typedef enum _NVME_FEATURES_SELECT {
+	FS_CURRENT                      = 0,
+	FS_DEFAULT                      = 1,
+	FS_SAVED                        = 2,
+	FS_SUPPORTED_CAPBILITIES        = 3
 } NVME_FEATURES_SELECT;
 
-typedef enum _NVME_FEATURE_IDENTIFIERS
-{
-    FID_ARBITRATION                                 = 0x01,
-    FID_POWER_MANAGEMENT                            = 0x02,
-    FID_LBA_RANGE_TYPE                              = 0x03,
-    FID_TEMPERATURE_THRESHOLD                       = 0x04,
-    FID_ERROR_RECOVERY                              = 0x05,
-    FID_VOLATILE_WRITE_CACHE                        = 0x06,
-    FID_NUMBER_OF_QUEUES                            = 0x07,
-    FID_INTERRUPT_COALESCING                        = 0x08,
-    FID_INTERRUPT_VECTOR_CONFIGURATION              = 0x09,
-    FID_WRITE_ATOMICITY                             = 0x0A,
-    FID_ASYNCHRONOUS_EVENT_CONFIGURATION            = 0x0B,
-    FID_AUTONOMOUS_POWER_STATE_TRANSITION           = 0x0C,
-/*Below FID's are NVM Command Set Specific*/
-    FID_SOFTWARE_PROGRESS_MARKER                    = 0x80,
-    FID_HOST_IDENTIFIER                             = 0x81,
-    FID_RESERVATION_NOTIFICATION_MASK               = 0x82,
-    FID_RESERVATION_PERSISTENCE                     = 0x83
+typedef enum _NVME_FEATURE_IDENTIFIERS {
+	FID_ARBITRATION                                 = 0x01,
+	FID_POWER_MANAGEMENT                            = 0x02,
+	FID_LBA_RANGE_TYPE                              = 0x03,
+	FID_TEMPERATURE_THRESHOLD                       = 0x04,
+	FID_ERROR_RECOVERY                              = 0x05,
+	FID_VOLATILE_WRITE_CACHE                        = 0x06,
+	FID_NUMBER_OF_QUEUES                            = 0x07,
+	FID_INTERRUPT_COALESCING                        = 0x08,
+	FID_INTERRUPT_VECTOR_CONFIGURATION              = 0x09,
+	FID_WRITE_ATOMICITY                             = 0x0A,
+	FID_ASYNCHRONOUS_EVENT_CONFIGURATION            = 0x0B,
+	FID_AUTONOMOUS_POWER_STATE_TRANSITION           = 0x0C,
+	/*Below FID's are NVM Command Set Specific*/
+	FID_SOFTWARE_PROGRESS_MARKER                    = 0x80,
+	FID_HOST_IDENTIFIER                             = 0x81,
+	FID_RESERVATION_NOTIFICATION_MASK               = 0x82,
+	FID_RESERVATION_PERSISTENCE                     = 0x83
 } NVME_FEATURE_IDENTIFIERS;
 
-typedef enum
-{
+typedef enum {
 	WDC_DE_TYPE_IDENTIFY            = 0x1,
 	WDC_DE_TYPE_SMARTATTRIBUTEDUMP  = 0x2,
 	WDC_DE_TYPE_EVENTLOG            = 0x4,
@@ -386,30 +385,26 @@ typedef enum
 	WDC_DE_TYPE_ALL                 = 0xFFFFFFF,
 } WDC_DRIVE_ESSENTIAL_TYPE;
 
-typedef struct __attribute__((__packed__)) _WDC_DE_VU_FILE_META_DATA
-{
-    __u8 fileName[WDC_DE_FILE_NAME_SIZE];
-    __u16 fileID;
-    __u64 fileSize;
+typedef struct __attribute__((__packed__)) _WDC_DE_VU_FILE_META_DATA {
+	__u8  fileName[WDC_DE_FILE_NAME_SIZE];
+	__u16 fileID;
+	__u64 fileSize;
 } WDC_DE_VU_FILE_META_DATA, *PWDC_DE_VU_FILE_META_DATA;
 
-typedef struct _WDC_DRIVE_ESSENTIALS
-{
-    WDC_DE_VU_FILE_META_DATA metaData;
-    WDC_DRIVE_ESSENTIAL_TYPE essentialType;
+typedef struct _WDC_DRIVE_ESSENTIALS {
+	WDC_DE_VU_FILE_META_DATA metaData;
+	WDC_DRIVE_ESSENTIAL_TYPE essentialType;
 } WDC_DRIVE_ESSENTIALS;
 
-typedef struct _WDC_DE_VU_LOG_DIRECTORY
-{
-    WDC_DRIVE_ESSENTIALS *logEntry;		/* Caller to allocate memory        */
-    __u32 maxNumLogEntries; 			/* Caller to input memory allocated */
-    __u32 numOfValidLogEntries;			/* API will output this value       */
+typedef struct _WDC_DE_VU_LOG_DIRECTORY {
+	WDC_DRIVE_ESSENTIALS *logEntry;			/* Caller to allocate memory        */
+	__u32 maxNumLogEntries; 			/* Caller to input memory allocated */
+	__u32 numOfValidLogEntries;			/* API will output this value       */
 } WDC_DE_VU_LOG_DIRECTORY,*PWDC_DE_VU_LOG_DIRECTORY;
 
-typedef struct _WDC_DE_CSA_FEATURE_ID_LIST
-{
-    NVME_FEATURE_IDENTIFIERS featureId;
-    __u8 featureName[WDC_DE_GENERIC_BUFFER_SIZE];
+typedef struct _WDC_DE_CSA_FEATURE_ID_LIST {
+	NVME_FEATURE_IDENTIFIERS featureId;
+	__u8 featureName[WDC_DE_GENERIC_BUFFER_SIZE];
 } WDC_DE_CSA_FEATURE_ID_LIST;
 
 typedef struct tarfile_metadata {
@@ -424,8 +419,7 @@ typedef struct tarfile_metadata {
 	uint8_t* timeString[MAX_PATH_LEN];
 } tarfile_metadata;
 
-static WDC_DE_CSA_FEATURE_ID_LIST deFeatureIdList[] =
-{
+static WDC_DE_CSA_FEATURE_ID_LIST deFeatureIdList[] = {
 	{0x00                                   , "Dummy Placeholder"},
 	{FID_ARBITRATION                        , "Arbitration"},
 	{FID_POWER_MANAGEMENT                   , "PowerMgmnt"},
@@ -441,27 +435,24 @@ static WDC_DE_CSA_FEATURE_ID_LIST deFeatureIdList[] =
 	{FID_AUTONOMOUS_POWER_STATE_TRANSITION  , "AutonomousPowerState"},
 };
 
-typedef enum _NVME_VU_DE_LOGPAGE_NAMES
-{
+typedef enum _NVME_VU_DE_LOGPAGE_NAMES {
     NVME_DE_LOGPAGE_E3 = 0x01,
     NVME_DE_LOGPAGE_C0 = 0x02
 } NVME_VU_DE_LOGPAGE_NAMES;
-typedef struct _NVME_VU_DE_LOGPAGE_LIST
-{
+
+typedef struct _NVME_VU_DE_LOGPAGE_LIST {
 	NVME_VU_DE_LOGPAGE_NAMES logPageName;
 	__u32	logPageId;
 	__u32	logPageLen;
 	char	logPageIdStr[5];
 } NVME_VU_DE_LOGPAGE_LIST, *PNVME_VU_DE_LOGPAGE_LIST;
 
-typedef struct _WDC_NVME_DE_VU_LOGPAGES
-{
+typedef struct _WDC_NVME_DE_VU_LOGPAGES {
     NVME_VU_DE_LOGPAGE_NAMES vuLogPageReqd;
     __u32 numOfVULogPages;
 } WDC_NVME_DE_VU_LOGPAGES, *PWDC_NVME_DE_VU_LOGPAGES;
 
-static NVME_VU_DE_LOGPAGE_LIST deVULogPagesList[] =
-{
+static NVME_VU_DE_LOGPAGE_LIST deVULogPagesList[] = {
     { NVME_DE_LOGPAGE_E3, 0xE3, 1072, "0xe3"},
     { NVME_DE_LOGPAGE_C0, 0xC0, 512, "0xc0"}
 };
@@ -596,21 +587,21 @@ struct wdc_log_page_subpage_header {
 };
 
 struct wdc_ssd_perf_stats {
-	__le64	hr_cmds;		/* Host Read Commands				*/
-	__le64	hr_blks;		/* Host Read Blocks					*/
+	__le64	hr_cmds;		/* Host Read Commands			*/
+	__le64	hr_blks;		/* Host Read Blocks			*/
 	__le64	hr_ch_cmds;		/* Host Read Cache Hit Commands		*/
 	__le64	hr_ch_blks;		/* Host Read Cache Hit Blocks		*/
 	__le64	hr_st_cmds;		/* Host Read Stalled Commands		*/
-	__le64	hw_cmds;		/* Host Write Commands				*/
-	__le64	hw_blks;		/* Host Write Blocks				*/
+	__le64	hw_cmds;		/* Host Write Commands			*/
+	__le64	hw_blks;		/* Host Write Blocks			*/
 	__le64	hw_os_cmds;		/* Host Write Odd Start Commands	*/
 	__le64	hw_oe_cmds;		/* Host Write Odd End Commands		*/
 	__le64	hw_st_cmds;		/* Host Write Commands Stalled		*/
-	__le64	nr_cmds;		/* NAND Read Commands				*/
-	__le64	nr_blks;		/* NAND Read Blocks					*/
-	__le64	nw_cmds;		/* NAND Write Commands				*/
-	__le64	nw_blks;		/* NAND Write Blocks				*/
-	__le64	nrbw;			/* NAND Read Before Write			*/
+	__le64	nr_cmds;		/* NAND Read Commands			*/
+	__le64	nr_blks;		/* NAND Read Blocks			*/
+	__le64	nw_cmds;		/* NAND Write Commands			*/
+	__le64	nw_blks;		/* NAND Write Blocks			*/
+	__le64	nrbw;			/* NAND Read Before Write		*/
 };
 
 /* Additional C2 Log Page */
@@ -664,30 +655,30 @@ struct __attribute__((__packed__)) wdc_ssd_ca_perf_stats {
 };
 
 struct __attribute__((__packed__)) wdc_ssd_d0_smart_log {
-    __le32  smart_log_page_header;                 /* 0x00 - Smart Log Page Header                       */
-    __le32  lifetime_realloc_erase_block_count;    /* 0x04 - Lifetime reallocated erase block count      */
-    __le32  lifetime_power_on_hours;               /* 0x08 - Lifetime power on hours                     */
-    __le32  lifetime_uecc_count;                   /* 0x0C - Lifetime UECC count                         */
-    __le32  lifetime_wrt_amp_factor;               /* 0x10 - Lifetime write amplification factor         */
-    __le32  trailing_hr_wrt_amp_factor;            /* 0x14 - Trailing hour write amplification factor    */
-    __le32  reserve_erase_block_count;             /* 0x18 - Reserve erase block count                   */
-    __le32  lifetime_program_fail_count;           /* 0x1C - Lifetime program fail count                 */
-    __le32  lifetime_block_erase_fail_count;       /* 0x20 - Lifetime block erase fail count             */
-    __le32  lifetime_die_failure_count;            /* 0x24 - Lifetime die failure count                  */
-    __le32  lifetime_link_rate_downgrade_count;    /* 0x28 - Lifetime link rate downgrade count          */
-    __le32  lifetime_clean_shutdown_count;         /* 0x2C - Lifetime clean shutdown count on power loss */
-    __le32  lifetime_unclean_shutdown_count;       /* 0x30 - Lifetime unclean shutdowns on power loss    */
-    __le32  current_temp;                          /* 0x34 - Current temperature                         */
-    __le32  max_recorded_temp;                     /* 0x38 - Max recorded temperature                    */
-    __le32  lifetime_retired_block_count;          /* 0x3C - Lifetime retired block count                */
-    __le32  lifetime_read_disturb_realloc_events;  /* 0x40 - Lifetime read disturb reallocation events   */
-    __le64  lifetime_nand_writes;                  /* 0x44 - Lifetime NAND write Lpages                  */
-    __le32  capacitor_health;                      /* 0x4C - Capacitor health                            */
-    __le64  lifetime_user_writes;                  /* 0x50 - Lifetime user writes                        */
-    __le64  lifetime_user_reads;                   /* 0x58 - Lifetime user reads                         */
-    __le32  lifetime_thermal_throttle_act;         /* 0x60 - Lifetime thermal throttle activations       */
-    __le32  percentage_pe_cycles_remaining;        /* 0x64 - Percentage of P/E cycles remaining          */
-    __u8    rsvd[408];                             /* 0x68 - 408 Reserved bytes                          */
+	__le32  smart_log_page_header;                 /* 0x00 - Smart Log Page Header                       */
+	__le32  lifetime_realloc_erase_block_count;    /* 0x04 - Lifetime reallocated erase block count      */
+	__le32  lifetime_power_on_hours;               /* 0x08 - Lifetime power on hours                     */
+	__le32  lifetime_uecc_count;                   /* 0x0C - Lifetime UECC count                         */
+	__le32  lifetime_wrt_amp_factor;               /* 0x10 - Lifetime write amplification factor         */
+	__le32  trailing_hr_wrt_amp_factor;            /* 0x14 - Trailing hour write amplification factor    */
+	__le32  reserve_erase_block_count;             /* 0x18 - Reserve erase block count                   */
+	__le32  lifetime_program_fail_count;           /* 0x1C - Lifetime program fail count                 */
+	__le32  lifetime_block_erase_fail_count;       /* 0x20 - Lifetime block erase fail count             */
+	__le32  lifetime_die_failure_count;            /* 0x24 - Lifetime die failure count                  */
+	__le32  lifetime_link_rate_downgrade_count;    /* 0x28 - Lifetime link rate downgrade count          */
+	__le32  lifetime_clean_shutdown_count;         /* 0x2C - Lifetime clean shutdown count on power loss */
+	__le32  lifetime_unclean_shutdown_count;       /* 0x30 - Lifetime unclean shutdowns on power loss    */
+	__le32  current_temp;                          /* 0x34 - Current temperature                         */
+	__le32  max_recorded_temp;                     /* 0x38 - Max recorded temperature                    */
+	__le32  lifetime_retired_block_count;          /* 0x3C - Lifetime retired block count                */
+	__le32  lifetime_read_disturb_realloc_events;  /* 0x40 - Lifetime read disturb reallocation events   */
+	__le64  lifetime_nand_writes;                  /* 0x44 - Lifetime NAND write Lpages                  */
+	__le32  capacitor_health;                      /* 0x4C - Capacitor health                            */
+	__le64  lifetime_user_writes;                  /* 0x50 - Lifetime user writes                        */
+	__le64  lifetime_user_reads;                   /* 0x58 - Lifetime user reads                         */
+	__le32  lifetime_thermal_throttle_act;         /* 0x60 - Lifetime thermal throttle activations       */
+	__le32  percentage_pe_cycles_remaining;        /* 0x64 - Percentage of P/E cycles remaining          */
+	__u8    rsvd[408];                             /* 0x68 - 408 Reserved bytes                          */
 };
 
 /* NAND Stats */
@@ -719,9 +710,9 @@ struct wdc_fw_act_history_log_entry {
 	__le64      power_on_seconds;
 	__le64      current_fw_version;
 	__le64      new_fw_version;
-    __u8        slot_number;
-    __u8        commit_action_type;
-    __le16      result;
+	__u8        slot_number;
+	__u8        commit_action_type;
+	__le16      result;
 	__u8        reserved[12];
 };
 
@@ -739,18 +730,6 @@ static double calc_percent(uint64_t numerator, uint64_t denominator)
 {
 	return denominator ?
 		(uint64_t)(((double)numerator / (double)denominator) * 100) : 0;
-}
-
-static long double int128_to_double(__u8 *data)
-{
-	int i;
-	long double result = 0;
-
-	for (i = 0; i < 16; i++) {
-		result *= 256;
-		result += data[15 - i];
-	}
-	return result;
 }
 
 static int wdc_get_pci_ids(uint32_t *device_id, uint32_t *vendor_id)
@@ -1550,7 +1529,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area, in
 	__u64 cap_dui_length_v3;
 	__u8 *dump_data = NULL;
 	__u8 *buffer_addr;
-	__s64 total_size = 0;
+	__u64 total_size = 0;
 	int i;
 	int j;
 	bool last_xfer = false;
@@ -1575,7 +1554,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area, in
 	/* Check the Log Header version  */
 	if (((log_hdr->hdr_version & 0xFF) == 0x02) ||
 		((log_hdr->hdr_version & 0xFF) == 0x03)) {					/* Process Version 2 or 3 header */
-		__s64 log_size = 0;
+		__u64 log_size = 0;
 		__u64 curr_data_offset = 0;
 		__u64 xfer_size_long = (__u64)xfer_size;
 
@@ -1685,7 +1664,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area, in
 			}
 		}
 	} else	{
-		__s32 log_size = 0;
+		__u32 log_size = 0;
 		__u32 curr_data_offset = 0;
 
 		cap_dui_length = le32_to_cpu(log_hdr->log_size);
@@ -1750,7 +1729,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area, in
 			buffer_addr = dump_data;
 
 			for(; log_size > 0; log_size -= xfer_size) {
-				xfer_size = min(xfer_size, log_size);
+				xfer_size = min(xfer_size, (__u32)log_size);
 
 				if (log_size <= xfer_size)
 					last_xfer = true;

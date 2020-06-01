@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include "common.h"
 #include "nvme.h"
 #include "json.h"
 #include "plugin.h"

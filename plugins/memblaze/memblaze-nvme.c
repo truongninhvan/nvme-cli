@@ -10,6 +10,8 @@
 #include "argconfig.h"
 #include "suffix.h"
 
+#include <ccan/minmax/minmax.h>
+
 #define CREATE_CMD
 #include "memblaze-nvme.h"
 
@@ -794,11 +796,10 @@ static int memblaze_selective_download(int argc, char **argv, struct command *cm
 		"ALL - This updates the eeprom, OOB, and main firmware";
 	const char *fw = "firmware file (required)";
 	const char *select = "FW Select (e.g., --select=OOB, EEP, ALL)";
-	int xfer = 4096;
+
+	int i, fd, selectNo, fw_fd, fw_size, err, offset = 0, xfer = 4096;
 	void *fw_buf;
-	int fd, selectNo,fw_fd,fw_size,err,offset = 0;
 	struct stat sb;
-	int i;
 
 	struct config {
 		char  *fw;

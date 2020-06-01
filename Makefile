@@ -17,7 +17,8 @@ UDEVDIR ?= $(SYSCONFDIR)/udev
 UDEVRULESDIR ?= $(UDEVDIR)/rules.d
 DRACUTDIR ?= $(LIBDIR)/dracut
 LIBNVMEDIR = libnvme/
-LDFLAGS ?= -I. -L$(LIBNVMEDIR)src/ -I$(LIBNVMEDIR)src/ -lnvme
+CCANDIR = $(LIBNVMEDIR)ccan/
+LDFLAGS ?= -I. -L$(LIBNVMEDIR)src/ -I$(LIBNVMEDIR)src/ -lnvme -I$(CCANDIR)/
 LIB_DEPENDS =
 
 ifeq ($(LIBUUID),0)
@@ -92,10 +93,10 @@ verify-no-dep: nvme.c nvme.h $(OBJS) NVME-VERSION-FILE
 nvme.o: nvme.c nvme.h util/argconfig.h util/suffix.h
 	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -c $< $(LDFLAGS)
 
-%.o: %.c %.h nvme.h util/argconfig.h
+%.o: %.c %.h nvme.h util/argconfig.h libnvme
 	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $< $(LDFLAGS)
 
-%.o: %.c nvme.h util/argconfig.h
+%.o: %.c nvme.h util/argconfig.h libnvme
 	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $< $(LDFLAGS)
 
 doc: $(NVME)
