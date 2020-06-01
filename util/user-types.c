@@ -4385,11 +4385,13 @@ void nvme_show_subsystem_list(nvme_root_t r, unsigned long flags)
 			nvme_subsystem_get_name(s),
 			nvme_subsystem_get_nqn(s));
 
-		nvme_subsystem_for_each_ns_safe(s, n, _n) {
-			printf("%c   |-- %s lba size:%d lba max:%lu\n",
-				_s ? '|' : ' ',
-				nvme_ns_get_name(n), nvme_ns_get_lba_size(n),
-				nvme_ns_get_lba_count(n));
+		if (!(flags & NVME_JSON_COMPACT)) {
+			nvme_subsystem_for_each_ns_safe(s, n, _n)
+				printf("%c   |-- %s lba size:%d lba max:%lu\n",
+					_s ? '|' : ' ',
+					nvme_ns_get_name(n),
+					nvme_ns_get_lba_size(n),
+					nvme_ns_get_lba_count(n));
 		}
 
 		nvme_subsystem_for_each_ctrl_safe(s, c, _c) {
@@ -4400,6 +4402,9 @@ void nvme_show_subsystem_list(nvme_root_t r, unsigned long flags)
 				nvme_ctrl_get_transport(c),
 				nvme_ctrl_get_address(c),
 				nvme_ctrl_get_state(c));
+
+			if (flags & NVME_JSON_COMPACT)
+				continue;
 
 			nvme_ctrl_for_each_ns_safe(c, n, _n)
 				printf("%c   %c   %c-- %s lba size:%d lba max:%lu\n",

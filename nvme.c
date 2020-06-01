@@ -1394,8 +1394,8 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 	if (flags < 0)
 		return err;
 
-	if (cfg.verbose)
-		flags |= 0;
+	if (!cfg.verbose)
+		flags |= NVME_JSON_COMPACT;
 
 	if (devicename)
 		r = nvme_scan_filter(nvme_match_device_filter);
