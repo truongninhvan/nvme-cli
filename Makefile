@@ -78,10 +78,10 @@ PLUGIN_OBJS :=					\
 	plugins/seagate/seagate-nvme.o 		\
 	plugins/virtium/virtium-nvme.o		\
 	plugins/shannon/shannon-nvme.o		\
-	plugins/dera/dera-nvme.o            \
-    plugins/transcend/transcend-nvme.o
+	plugins/dera/dera-nvme.o		\
+	plugins/transcend/transcend-nvme.o
 
-libnvme:
+libnvme: $(LIBNVMEDIR)
 	$(MAKE) -C $(LIBNVMEDIR)
 
 nvme: nvme.c nvme.h libnvme $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) NVME-VERSION-FILE

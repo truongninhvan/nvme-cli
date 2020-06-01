@@ -173,9 +173,9 @@ static inline long double int128_to_double(__u8 *data)
 	return ret;
 }
 
-static inline __u64 unalign_int(uint8_t *data, int len)
+static inline uint64_t unalign_int(uint8_t *data, int len)
 {
-	__u64 ret = 0;
+	uint64_t ret = 0;
 	int i;
 
 	for (i = len - 1; i >= 0; i--)
@@ -523,6 +523,8 @@ static inline void nvme_json_object_print(FILE *f, struct json_object *j,
 		fprintf(f, "%s", json_object_to_json_string_ext(j, jflags));
 }
 
+void nvme_show_subsystem_list(nvme_root_t r, unsigned long flags);
+void nvme_show_list(nvme_root_t r, unsigned long flags);
 const char *nvme_status_to_string(int status, bool fabrics);
 const char *nvme_get_feature_select_to_string(__u8 sel);
 void d(unsigned char *buf, int len, int width, int group);

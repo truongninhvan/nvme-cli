@@ -11,6 +11,7 @@
 #include <ccan/array_size/array_size.h>
 
 #include "user-types.h"
+#include "suffix.h"
 
 static const char dash[101] = {[0 ... 99] = '-'};
 
@@ -494,8 +495,8 @@ static int __display_human_size128(struct json_object *o, struct printbuf *p,
 	uint64_t upper = 0, lower = 0, v;
 	int j;
 
-        for (j = 7; j >= 0; j--) {
-                lower = lower * 256 + s[j];
+	for (j = 7; j >= 0; j--) {
+		lower = lower * 256 + s[j];
 		upper = upper * 256 + s[j + 8];
 	}
 
@@ -1199,11 +1200,11 @@ static int display_uuid(struct json_object *o, struct printbuf *p,
 	int l, int f)
 {
 	char buf[40];
-        uuid_t uuid;
+	uuid_t uuid;
 
 	memcpy((void *)uuid, json_object_get_string(o),
 		sizeof(uuid_t));
-        uuid_unparse(uuid, buf);
+	uuid_unparse(uuid, buf);
 	return printbuf_memappend(p, buf, strlen(buf));
 }
 
@@ -3228,7 +3229,7 @@ struct json_object *nvme_id_ns_desc_list_to_json(void *list,
 			nvme_id_ns_desc_to_json(cur, flags));
 		p += cur->nidl + sizeof(*cur);
 		cur = p;
-	} 
+	}
 	json_object_object_add(jlist, "ns-id-descriptors", jdescs);
 
 	return jlist;
@@ -3829,7 +3830,7 @@ struct json_object *nvme_lba_status_log_to_json(
 	while (offset < lslplen - sizeof(*lbas)) {
 		struct nvme_lbas_ns_element *element = base + offset;
 
-		json_object_array_add(jelems, 
+		json_object_array_add(jelems,
 			nvme_lba_status_log_ns_element_to_json(element,
 							       &offset, flags));
 	}
@@ -4215,4 +4216,208 @@ struct json_object *nvme_resv_report_to_json(
 	json_object_object_add(jrs, "nsids", jrcs);
 
 	return NULL;
+}
+
+static void nvme_show_ns_details(nvme_ns_t n)
+{
+	char usage[128] = { 0 }, format[128] = { 0 };
+
+	long long lba = nvme_ns_get_lba_size(n);
+	double nsze = nvme_ns_get_lba_count(n) * lba;
+	double nuse = nvme_ns_get_lba_util(n) * lba;
+
+	const char *s_suffix = suffix_si_get(&nsze);
+	const char *u_suffix = suffix_si_get(&nuse);
+	const char *l_suffix = suffix_binary_get(&lba);
+
+	sprintf(usage,"%6.2f %2sB / %6.2f %2sB", nuse, u_suffix, nsze, s_suffix);
+	sprintf(format,"%3.0f %2sB + %2d B", (double)lba, l_suffix,
+		nvme_ns_get_meta_size(n));
+
+	printf("%-12s %-8x %-26s %-16s ", nvme_ns_get_name(n),
+		nvme_ns_get_nsid(n), usage, format);
+}
+
+static void nvme_show_list_item(nvme_ns_t n)
+{
+	char usage[128] = { 0 }, format[128] = { 0 };
+
+	long long lba = nvme_ns_get_lba_size(n);
+	double nsze = nvme_ns_get_lba_count(n) * lba;
+	double nuse = nvme_ns_get_lba_util(n) * lba;
+
+	const char *s_suffix = suffix_si_get(&nsze);
+	const char *u_suffix = suffix_si_get(&nuse);
+	const char *l_suffix = suffix_binary_get(&lba);
+
+	nvme_ctrl_t c = nvme_ns_get_ctrl(n);
+
+	snprintf(usage, sizeof(usage), "%6.2f %2sB / %6.2f %2sB", nuse,
+		u_suffix, nsze, s_suffix);
+	snprintf(format, sizeof(format), "%3.0f %2sB + %2d B", (double)lba,
+		l_suffix, nvme_ns_get_meta_size(n));
+
+	printf("%-12s %-20s %-40s %-9d %-26s %-16s %-8s\n",
+		nvme_ns_get_name(n), nvme_ctrl_get_serial(c),
+		nvme_ctrl_get_model(c), nvme_ns_get_nsid(n), usage, format,
+		nvme_ctrl_get_firmware(c));
+}
+
+static void nvme_show_simple_list(nvme_root_t r)
+{
+	nvme_subsystem_t s;
+	nvme_ctrl_t c;
+	nvme_ns_t n;
+
+	printf("%-12s %-20s %-40s %-9s %-26s %-16s %-8s\n",
+	    "Node", "SN", "Model", "Namespace", "Usage", "Format", "FW Rev");
+	printf("%-.12s %-.20s %-.40s %-.9s %-.26s %-.16s %-.8s\n", dash, dash,
+		dash, dash, dash, dash, dash);
+
+	nvme_for_each_subsystem(r, s) {
+		nvme_subsystem_for_each_ns(s, n)
+			nvme_show_list_item(n);
+
+		nvme_subsystem_for_each_ctrl(s, c)
+			nvme_ctrl_for_each_ns(c, n)
+				nvme_show_list_item(n);
+	}
+}
+
+static void nvme_show_verbose_list(nvme_root_t r)
+{
+	nvme_subsystem_t s;
+	nvme_ctrl_t c;
+	nvme_path_t p;
+	nvme_ns_t n;
+
+	printf("%-16s %-96s %-.16s\n", "Subsystem", "Subsystem-NQN", "Controllers");
+	printf("%-.16s %-.96s %-.16s\n", dash, dash, dash);
+
+	nvme_for_each_subsystem(r, s) {
+		bool first = true;
+		printf("%-16s %-96s ", nvme_subsystem_get_name(s), nvme_subsystem_get_nqn(s));
+
+		nvme_subsystem_for_each_ctrl(s, c) {
+			printf("%s%s", first ? "": ", ", nvme_ctrl_get_name(c));
+			first = false;
+		}
+		printf("\n");
+	}
+	printf("\n");
+
+	printf("%-8s %-20s %-40s %-8s %-6s %-14s %-12s %-16s\n", "Device",
+		"SN", "MN", "FR", "TxPort", "Address", "Subsystem", "Namespaces");
+	printf("%-.8s %-.20s %-.40s %-.8s %-.6s %-.14s %-.12s %-.16s\n", dash, dash,
+		dash, dash, dash, dash, dash, dash);
+
+	nvme_for_each_subsystem(r, s) {
+		nvme_subsystem_for_each_ctrl(s, c) {
+			bool first = true;
+
+			printf("%-8s %-20s %-40s %-8s %-6s %-14s %-12s ",
+				nvme_ctrl_get_name(c), nvme_ctrl_get_serial(c),
+				nvme_ctrl_get_model(c), nvme_ctrl_get_firmware(c),
+				nvme_ctrl_get_transport(c), nvme_ctrl_get_address(c),
+				nvme_subsystem_get_name(s));
+
+			nvme_ctrl_for_each_ns(c, n) {
+				printf("%s%s", first ? "": ", ",
+					nvme_ns_get_name(n));
+				first = false;
+			}
+
+			nvme_ctrl_for_each_path(c, p) {
+				printf("%s%s", first ? "": ", ",
+					nvme_ns_get_name(nvme_path_get_ns(p)));
+				first = false;
+			}
+			printf("\n");
+		}
+	}
+	printf("\n");
+
+	printf("%-12s %-8s %-26s %-16s %-16s\n", "Device", "NSID", "Usage",
+		"Format", "Controllers");
+	printf("%-.12s %-.8s %-.26s %-.16s %-.16s\n", dash, dash, dash, dash,
+		dash);
+
+	nvme_for_each_subsystem(r, s) {
+		nvme_subsystem_for_each_ctrl(s, c)
+			nvme_ctrl_for_each_ns(c, n) {
+				nvme_show_ns_details(n);
+				printf("%s\n", nvme_ctrl_get_name(c));
+			}
+
+		nvme_subsystem_for_each_ns(s, n) {
+			bool first = true;
+
+			nvme_show_ns_details(n);
+			nvme_subsystem_for_each_ctrl(s, c) {
+				printf("%s%s", first ? "" : ", ",
+					nvme_ctrl_get_name(c));
+				first = false;
+			}
+			printf("\n");
+		}
+	}
+}
+
+void nvme_show_list(nvme_root_t r, unsigned long flags)
+{
+	if (flags & NVME_JSON_COMPACT)
+		nvme_show_simple_list(r);
+	else
+		nvme_show_verbose_list(r);
+}
+
+void nvme_show_subsystem_list(nvme_root_t r, unsigned long flags)
+{
+	nvme_subsystem_t s, _s;
+	nvme_ctrl_t c, _c;
+	nvme_path_t p, _p;
+	nvme_ns_t n, _n;
+
+	printf(".\n");
+	nvme_for_each_subsystem_safe(r, s, _s) {
+		printf("%c-- %s - NQN=%s\n",
+			_s ? '|' : '`',
+			nvme_subsystem_get_name(s),
+			nvme_subsystem_get_nqn(s));
+
+		nvme_subsystem_for_each_ns_safe(s, n, _n) {
+			printf("%c   |-- %s lba size:%d lba max:%lu\n",
+				_s ? '|' : ' ',
+				nvme_ns_get_name(n), nvme_ns_get_lba_size(n),
+				nvme_ns_get_lba_count(n));
+		}
+
+		nvme_subsystem_for_each_ctrl_safe(s, c, _c) {
+			printf("%c   %c-- %s %s %s %s\n",
+				_s ? '|' : ' ',
+				_c ? '|' : '`',
+				nvme_ctrl_get_name(c),
+				nvme_ctrl_get_transport(c),
+				nvme_ctrl_get_address(c),
+				nvme_ctrl_get_state(c));
+
+			nvme_ctrl_for_each_ns_safe(c, n, _n)
+				printf("%c   %c   %c-- %s lba size:%d lba max:%lu\n",
+					_s ? '|' : ' ',
+					_c ? '|' : ' ',
+					_n ? '|' : '`',
+					nvme_ns_get_name(n),
+					nvme_ns_get_lba_size(n),
+					nvme_ns_get_lba_count(n));
+
+			nvme_ctrl_for_each_path_safe(c, p, _p)
+				printf("%c   %c   %c-- %s %s\n",
+					_s ? '|' : ' ',
+					_c ? '|' : ' ',
+					_p ? '|' : '`',
+					nvme_path_get_name(p),
+					nvme_path_get_ana_state(p));
+		}
+	}
+	printf("\n");
 }
