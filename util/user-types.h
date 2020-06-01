@@ -370,12 +370,6 @@ static inline void nvme_json_add_hex_le16(struct json_object *j,
 	nvme_json_add_hex(j, n, le16_to_cpu(v), flags);
 }
 
-static void chomp(char *s, int l)
-{
-	while (l && (s[l] == '\0' || s[l] == ' '))
-		s[l--] = '\0';
-}
-
 static inline void nvme_json_add_str_flags(struct json_object *j, const char *n,
 					  const char *v, int l, unsigned long flags)
 {
@@ -387,7 +381,7 @@ static inline void nvme_json_add_str_flags(struct json_object *j, const char *n,
 	}
 
         snprintf(buf, sizeof(buf), "%-.*s", l, v);
-	chomp(buf, l);
+	nvme_chomp(buf, l);
 
 	nvme_json_add_str(j, n, buf, flags);
 }
