@@ -135,7 +135,8 @@ struct json_object *nvme_resv_report_to_json(
 	unsigned long flags);
 
 struct json_object *nvme_json_new_str_len(const char *v, int len);
-struct json_object *nvme_json_new_str_len_flags(const void *v, int len, unsigned long flags);
+struct json_object *nvme_json_new_str_len_flags(const void *v, int len,
+	unsigned long flags);
 struct json_object *nvme_json_new_str(const char *v, unsigned long flags);
 struct json_object *nvme_json_new_int128(uint8_t *v);
 struct json_object *nvme_json_new_int64(uint64_t v);

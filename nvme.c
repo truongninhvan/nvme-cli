@@ -211,11 +211,11 @@ int validate_output_format(char *format)
 	if (!format)
 		return -EINVAL;
 	if (!strcmp(format, "normal"))
-		return NORMAL;
+		return NVME_JSON_TABULAR;
 	if (!strcmp(format, "json"))
 		return JSON;
 	if (!strcmp(format, "binary"))
-		return BINARY;
+		return NVME_JSON_BINARY;
 	if (!strcmp(format, "none"))
 		return 0;
 	return -EINVAL;
