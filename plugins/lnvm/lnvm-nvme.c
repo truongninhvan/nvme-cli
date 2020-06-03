@@ -794,7 +794,7 @@ int lnvm_do_chunk_log(int fd, __u32 nsid, __u32 data_len, void *data,
 	int err;
 
 	err = nvme_get_log(fd, NVM_LID_CHUNK_INFO, nsid, 0, 0, 0,
-			false, 0, data_len, data);
+			false, 0, 0, data_len, data);
 	if (err > 0) {
 		fprintf(stderr, "NVMe Status:%s(%x) NSID:%d\n",
 			nvme_status_to_string(err, false), err, nsid);

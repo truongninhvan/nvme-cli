@@ -64,7 +64,7 @@ static struct program nvme = {
 	.extensions = &builtin,
 };
 
-static const char *output_format = "Output format: normal|json|binary";
+const char *output_format = "Output format: normal|json|binary";
 
 /* Name of file to output log pages in their raw format */
 static char *raw;
@@ -230,7 +230,7 @@ void nvme_show_status(const char *prefix, int status)
 			nvme_status_to_string(status, false), status);
 }
 
-static void nvme_print_object(struct json_object *j)
+void nvme_print_object(struct json_object *j)
 {
 	const unsigned long jflags =
 		JSON_C_TO_STRING_SPACED|JSON_C_TO_STRING_PRETTY;
@@ -637,6 +637,7 @@ static int get_effects_log(int argc, char **argv, struct command *cmd, struct pl
 	const char *desc = "Retrieve command effects log page and print the table.";
 	const char *raw = "show log in binary format";
 	const char *human_readable = "show log in readable format";
+	const char *csi = "command set indicator";
 	struct nvme_cmd_effects_log log;
 
 	int err, fd;
@@ -645,15 +646,18 @@ static int get_effects_log(int argc, char **argv, struct command *cmd, struct pl
 	struct config {
 		int   raw_binary;
 		int   human_readable;
+		int   csi;
 		char *output_format;
 	};
 
 	struct config cfg = {
+		.csi = NVME_CSI_NVM,
 		.output_format = "normal",
 	};
 
 	OPT_ARGS(opts) = {
 		OPT_FMT("output-format",  'o', &cfg.output_format,  output_format),
+		OPT_INT("csi",            'c', &cfg.csi,            csi),
 		OPT_FLAG("human-readable",'H', &cfg.human_readable, human_readable),
 		OPT_FLAG("raw-binary",    'b', &cfg.raw_binary,     raw),
 		OPT_END()
@@ -671,7 +675,7 @@ static int get_effects_log(int argc, char **argv, struct command *cmd, struct pl
 	if (cfg.human_readable)
 		flags |= VERBOSE;
 
-	err = nvme_get_log_cmd_effects(fd, &log);
+	err = nvme_get_log_cmd_effects(fd, cfg.csi, &log);
 	if (!err)
 		nvme_show_effects_log(&log, flags);
 	else
@@ -926,7 +930,8 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 	}
 
 	err = nvme_get_log(fd, cfg.log_id, cfg.namespace_id, cfg.lpo, cfg.lsp, 
-			     0, cfg.rae, cfg.uuid_index, cfg.log_len, log);
+			   0, cfg.rae, cfg.uuid_index, NVME_CSI_NVM,
+			   cfg.log_len, log);
 	if (!err) {
 		if (!cfg.raw_binary) {
 			printf("Device:%s log-id:%d namespace-id:%#x\n",

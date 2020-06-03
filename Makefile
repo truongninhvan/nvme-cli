@@ -66,6 +66,7 @@ OBJS := models.o plugin.o
 UTIL_OBJS := util/argconfig.o util/suffix.o util/json.o util/parser.o util/user-types.o
 
 PLUGIN_OBJS :=					\
+	plugins/zns/zns.o			\
 	plugins/intel/intel-nvme.o		\
 	plugins/lnvm/lnvm-nvme.o		\
 	plugins/memblaze/memblaze-nvme.o	\

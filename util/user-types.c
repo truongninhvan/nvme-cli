@@ -4219,7 +4219,21 @@ struct json_object *nvme_resv_report_to_json(
 	}
 	json_object_object_add(jrs, "nsids", jrcs);
 
-	return NULL;
+	return jrs;
+}
+
+struct json_object *nvme_zns_id_ctrl_to_json(
+	struct nvme_zns_id_ctrl *ctrl, unsigned long flags)
+{
+	struct json_object *jctrl;
+
+	if (flags & NVME_JSON_BINARY)
+		return nvme_json_new_str_len_flags(ctrl, sizeof(*ctrl), flags);
+
+	jctrl = nvme_json_new_object(flags);
+	nvme_json_add_int(jctrl, "zamds", ctrl->zamds);
+
+	return jctrl;
 }
 
 static void nvme_show_ns_details(nvme_ns_t n)

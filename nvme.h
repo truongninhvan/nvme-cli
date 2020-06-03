@@ -30,6 +30,8 @@
 #define BINARY NVME_JSON_BINARY
 #define VERBOSE (NVME_JSON_DECODE_COMPLEX|NVME_JSON_HUMAN)
 
+extern const char *output_format;
+
 void register_extension(struct plugin *plugin);
 int parse_and_open(int argc, char **argv, const char *desc,
 	const struct argconfig_commandline_options *clo);
@@ -40,5 +42,6 @@ void nvme_show_status(const char *prefix, int status);
 int validate_output_format(char *format);
 int __id_ctrl(int argc, char **argv, struct command *cmd,
 	struct plugin *plugin, void (*vs)(__u8 *vs, struct json_object *root));
+void nvme_print_object(struct json_object *j);
 
 #endif /* _NVME_H */

@@ -134,6 +134,10 @@ struct json_object *nvme_resv_report_to_json(
 	struct nvme_resv_status *status, bool ext,
 	unsigned long flags);
 
+struct json_object *nvme_zns_id_ctrl_to_json(
+	struct nvme_zns_id_ctrl *ctrl,
+	unsigned long flags);
+
 struct json_object *nvme_json_new_str_len(const char *v, int len);
 struct json_object *nvme_json_new_str_len_flags(const void *v, int len,
 	unsigned long flags);

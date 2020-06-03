@@ -137,7 +137,7 @@ static int get_additional_smart_log(int argc, char **argv, struct command *cmd, 
 	};
 
 	fd = parse_and_open(argc, argv, desc, opts);
-	err = nvme_get_log(fd, 0xca, cfg.namespace_id, 0, 0, 0, false, 0,
+	err = nvme_get_log(fd, 0xca, cfg.namespace_id, 0, 0, 0, false, 0, 0,
 		   sizeof(smart_log), &smart_log);
 	if (!err) {
 		if (!cfg.raw_binary)
