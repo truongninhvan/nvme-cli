@@ -917,7 +917,10 @@ static int display_tabular(struct json_object *jso, struct printbuf *p,
 	json_object_object_foreach(jso, tkey, tval) {
 		(void)tkey;
 
-		if (strlen(tkey) + 1 > len)
+		if (json_object_get_type(tval) == json_type_array) {
+			if (strlen(tkey) + 4 > len)
+				len = strlen(tkey) + 4;
+		} else if (strlen(tkey) + 1 > len)
 			len = strlen(tkey) + 1;
 	}
 
@@ -4222,8 +4225,8 @@ struct json_object *nvme_resv_report_to_json(
 	return jrs;
 }
 
-struct json_object *nvme_zns_id_ctrl_to_json(
-	struct nvme_zns_id_ctrl *ctrl, unsigned long flags)
+struct json_object *nvme_zns_id_ctrl_to_json( struct nvme_zns_id_ctrl *ctrl,
+	unsigned long flags)
 {
 	struct json_object *jctrl;
 
@@ -4234,6 +4237,52 @@ struct json_object *nvme_zns_id_ctrl_to_json(
 	nvme_json_add_int(jctrl, "zamds", ctrl->zamds);
 
 	return jctrl;
+}
+
+static void nvme_json_add_zns_id_ns_lbafe(struct json_object *j,
+	struct nvme_zns_lbafe *lbafe, bool in_use, uint32_t bs,
+	unsigned long flags)
+{
+	struct json_object *jlbaf = nvme_json_new_object(flags);
+
+	if (flags & NVME_JSON_HUMAN)
+		nvme_json_add_size_flags(jlbaf, "zsze",
+			le64_to_cpu(lbafe->zsze) * bs, flags);
+	else
+		nvme_json_add_le64(jlbaf, "zsze", le64_to_cpu(lbafe->zsze));
+
+	nvme_json_add_size_flags(jlbaf, "zdes", lbafe->zdes, flags);
+	nvme_json_add_bool(jlbaf, "in-use", in_use);
+
+	json_object_array_add(j, jlbaf);
+}
+
+struct json_object *nvme_zns_id_ns_to_json( struct nvme_zns_id_ns *ns,
+	struct nvme_id_ns *id_ns, unsigned long flags)
+{
+	uint8_t lbaf = id_ns->flbas & NVME_NS_FLBAS_LBA_MASK;
+	uint32_t bs = 1 << id_ns->lbaf[lbaf].ds;
+	struct json_object *jns, *jlbafs;
+	int i;
+
+	if (flags & NVME_JSON_BINARY)
+		return nvme_json_new_str_len_flags(ns, sizeof(*ns), flags);
+
+	jns = nvme_json_new_object(flags);
+	nvme_json_add_hex_le16_flags(jns, "zoc", ns->zoc, flags);
+	nvme_json_add_hex_le16_flags(jns, "ozcs", ns->ozcs, flags);
+	nvme_json_add_hex_le32_flags(jns, "mar", ns->mar, flags);
+	nvme_json_add_hex_le32_flags(jns, "mor", ns->mor, flags);
+	nvme_json_add_le32(jns, "rrl", ns->rrl);
+	nvme_json_add_le32(jns, "frl", ns->frl);
+
+	jlbafs = nvme_json_new_array();
+	for (i = 0; i <= id_ns->nlbaf; i++)
+		nvme_json_add_zns_id_ns_lbafe(jlbafs, &ns->lbafe[i], i == lbaf,
+			bs, flags);
+	json_object_object_add(jns, "lbaf", jlbafs);
+
+	return jns;
 }
 
 static void nvme_show_ns_details(nvme_ns_t n)

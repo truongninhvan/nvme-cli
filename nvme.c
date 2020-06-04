@@ -1614,7 +1614,7 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	int err, fd;
 
 	struct config {
-		__u32 namespace_id;
+		int   namespace_id;
 		int   vendor_specific;
 		int   raw_binary;
 		int   human_readable;
@@ -1653,13 +1653,12 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	if (!cfg.namespace_id) {
 		cfg.namespace_id = nvme_get_nsid(fd);
 		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
-			goto close_fd;
-		}
-		else if (!cfg.namespace_id) {
 			fprintf(stderr,
 				"Error: requesting namespace-id from non-block device\n");
-			err = -ENOTBLK;
+			err = cfg.namespace_id;
+			goto close_fd;
+		} else if (!cfg.namespace_id) {
+			err = -EINVAL;
 			goto close_fd;
 		}
 	}
@@ -2968,9 +2967,7 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 			goto close_fd;
 		}
 		memset(buf, 0, cfg.data_len);
-	}
 
-	if (buf) {
 		if (cfg.file) {
 			ffd = open(cfg.file, O_RDONLY);
 			if (ffd <= 0) {
@@ -3784,6 +3781,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 	const char *dtype = "directive type (for write-only)";
 	const char *dspec = "directive specific (for write-only)";
 	const char *dsm = "dataset management attributes (lower 16 bits)";
+	const char *namespace_id = "desired namespace";
 
 	struct config {
 		__u64 start_block;
@@ -3799,6 +3797,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		__u16 dsmgmt;
 		__u16 app_tag_mask;
 		__u16 app_tag;
+		int   namespace_id;
 		int   limited_retry;
 		int   force_unit_access;
 		int   show;
@@ -3809,6 +3808,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 	struct config cfg = { 0 };
 
 	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id",      'n', &cfg.namespace_id,      namespace_id),
 		OPT_SUFFIX("start-block",     's', &cfg.start_block,       start_block),
 		OPT_SHRT("block-count",       'c', &cfg.block_count,       block_count),
 		OPT_SUFFIX("data-size",       'z', &cfg.data_size,         data_size),
@@ -3834,6 +3834,14 @@ static int submit_io(int opcode, char *command, const char *desc,
 	if (fd < 0)
 		goto ret;
 
+	if (!cfg.namespace_id) {
+		cfg.namespace_id = nvme_get_nsid(fd);
+		if (cfg.namespace_id <= 0) {
+			err = cfg.namespace_id;
+			goto close_fd;
+		}
+	}
+
 	dfd = mfd = opcode & 1 ? STDIN_FILENO : STDOUT_FILENO;
 	if (cfg.prinfo > 0xf) {
 		err = -EINVAL;
@@ -3857,7 +3865,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		dsmgmt |= ((__u32)cfg.dspec) << 16;
 	}
 
-	if (cfg.data && strlen(cfg.data)) {
+	if (cfg.data) {
 		dfd = open(cfg.data, flags, mode);
 		if (dfd < 0) {
 			perror(cfg.data);
@@ -3866,7 +3874,8 @@ static int submit_io(int opcode, char *command, const char *desc,
 		}
 		mfd = dfd;
 	}
-	if (cfg.metadata && strlen(cfg.metadata)) {
+
+	if (cfg.metadata) {
 		mfd = open(cfg.metadata, flags, mode);
 		if (mfd < 0) {
 			perror(cfg.metadata);
@@ -3886,8 +3895,9 @@ static int submit_io(int opcode, char *command, const char *desc,
 
 	buffer_size = (cfg.block_count + 1) * phys_sector_size;
 	if (cfg.data_size < buffer_size)
-		fprintf(stderr, "Rounding data size to fit block count (%u bytes)\n",
-				buffer_size);
+		fprintf(stderr,
+			"Rounding data size to fit block count (%u bytes)\n",
+			buffer_size);
 	else
 		buffer_size = cfg.data_size;
 
@@ -3897,6 +3907,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		err = -1;
 		goto close_mfd;
 	}
+	memset(buffer, 0, buffer_size);
 
 	if (cfg.metadata_size) {
 		mbuffer = malloc(cfg.metadata_size);
@@ -3949,14 +3960,14 @@ static int submit_io(int opcode, char *command, const char *desc,
 
 	gettimeofday(&start_time, NULL);
 	if (opcode & 1)
-		err = nvme_write(fd, 0, cfg.start_block, cfg.block_count,
-			control, dsmgmt, 0, cfg.ref_tag, cfg.app_tag,
-			cfg.app_tag_mask, buffer_size, buffer,
+		err = nvme_write(fd, cfg.namespace_id, cfg.start_block,
+			cfg.block_count, control, dsmgmt, 0, cfg.ref_tag,
+			cfg.app_tag, cfg.app_tag_mask, buffer_size, buffer,
 			cfg.metadata_size, mbuffer);
 	else
-		err = nvme_read(fd, 0, cfg.start_block, cfg.block_count,
-			control, dsmgmt, cfg.ref_tag, cfg.app_tag,
-			cfg.app_tag_mask, buffer_size, buffer,
+		err = nvme_read(fd, cfg.namespace_id, cfg.start_block,
+			cfg.block_count, control, dsmgmt, cfg.ref_tag,
+			cfg.app_tag, cfg.app_tag_mask, buffer_size, buffer,
 			cfg.metadata_size, mbuffer);
 	gettimeofday(&end_time, NULL);
 
@@ -3985,10 +3996,11 @@ free_mbuffer:
 free_buffer:
 	nvme_free(buffer, huge);
 close_mfd:
-	if (strlen(cfg.metadata))
+	if (cfg.metadata)
 		close(mfd);
 close_dfd:
-	close(dfd);
+	if (cfg.data)
+		close(dfd);
 close_fd:
 	close(fd);
 ret:
