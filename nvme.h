@@ -44,4 +44,7 @@ int __id_ctrl(int argc, char **argv, struct command *cmd,
 	struct plugin *plugin, void (*vs)(__u8 *vs, struct json_object *root));
 void nvme_print_object(struct json_object *j);
 
+void nvme_free(void *p, bool huge);
+void *nvme_alloc(size_t len, bool *huge);
+
 #endif /* _NVME_H */

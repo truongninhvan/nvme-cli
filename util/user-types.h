@@ -140,6 +140,9 @@ struct json_object *nvme_zns_id_ctrl_to_json(struct nvme_zns_id_ctrl *ctrl,
 struct json_object *nvme_zns_id_ns_to_json( struct nvme_zns_id_ns *ns,
 	struct nvme_id_ns *id_ns, unsigned long flags);
 
+struct json_object *nvme_zns_report_zones_to_json(void *report, __u32 descs,
+	__u8 ext_size, __u32 report_size, unsigned long flags);
+
 struct json_object *nvme_json_new_str_len(const char *v, int len);
 struct json_object *nvme_json_new_str_len_flags(const void *v, int len,
 	unsigned long flags);
@@ -360,7 +363,7 @@ static inline void nvme_json_add_le16(struct json_object *j,
 }
 
 static inline void nvme_json_add_hex_le64(struct json_object *j,
-					  const char *n, __le32 v, unsigned long flags)
+					  const char *n, __le64 v, unsigned long flags)
 {
 	nvme_json_add_hex(j, n, le64_to_cpu(v), flags);
 }
@@ -416,6 +419,15 @@ static inline void nvme_json_add_size_flags(struct json_object *j, const char *n
 {
 	if (flags & NVME_JSON_HUMAN)
 		nvme_json_add_size(j, n, v, flags);
+	else
+		nvme_json_add_int64(j, n, v);
+}
+
+static inline void nvme_json_add_0x_flags(struct json_object *j, const char *n,
+				     uint64_t v, unsigned long flags)
+{
+	if (flags & NVME_JSON_HUMAN)
+		nvme_json_add_0x(j, n, v, flags);
 	else
 		nvme_json_add_int64(j, n, v);
 }
@@ -476,7 +488,7 @@ static inline void nvme_json_add_hex_le16_flags(struct json_object *j,
 }
 
 static inline void nvme_json_add_hex_le32_flags(struct json_object *j,
-						const char *n, __le16 v,
+						const char *n, __le32 v,
 						unsigned long flags)
 {
 	if (flags & NVME_JSON_HUMAN)
@@ -486,7 +498,7 @@ static inline void nvme_json_add_hex_le32_flags(struct json_object *j,
 }
 
 static inline void nvme_json_add_hex_le64_flags(struct json_object *j,
-						const char *n, __le16 v,
+						const char *n, __le64 v,
 						unsigned long flags)
 {
 	if (flags & NVME_JSON_HUMAN)

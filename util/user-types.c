@@ -4257,7 +4257,7 @@ static void nvme_json_add_zns_id_ns_lbafe(struct json_object *j,
 	json_object_array_add(j, jlbaf);
 }
 
-struct json_object *nvme_zns_id_ns_to_json( struct nvme_zns_id_ns *ns,
+struct json_object *nvme_zns_id_ns_to_json(struct nvme_zns_id_ns *ns,
 	struct nvme_id_ns *id_ns, unsigned long flags)
 {
 	uint8_t lbaf = id_ns->flbas & NVME_NS_FLBAS_LBA_MASK;
@@ -4283,6 +4283,51 @@ struct json_object *nvme_zns_id_ns_to_json( struct nvme_zns_id_ns *ns,
 	json_object_object_add(jns, "lbaf", jlbafs);
 
 	return jns;
+}
+
+static void nvme_json_add_zns_report_desc(struct json_object *j,
+	struct nvme_zns_desc *desc, unsigned long flags)
+{
+	struct json_object *jdesc = nvme_json_new_object(flags);
+
+	nvme_json_add_0x_flags(jdesc, "zt", desc->zt, flags);
+	nvme_json_add_0x_flags(jdesc, "zs", desc->zs, flags);
+	nvme_json_add_0x_flags(jdesc, "za", desc->za, flags);
+	nvme_json_add_0x_flags(jdesc, "zcap", le64_to_cpu(desc->zcap), flags);
+	nvme_json_add_0x_flags(jdesc, "zslba", le64_to_cpu(desc->zslba), flags);
+	nvme_json_add_0x_flags(jdesc, "wp", le64_to_cpu(desc->wp), flags);;
+
+	json_object_array_add(j, jdesc);
+}
+
+struct json_object *nvme_zns_report_zones_to_json(void *report, __u32 descs,
+	__u8 ext_size, __u32 report_size, unsigned long flags)
+{
+	struct json_object *jreport, *jdescs;
+	struct nvme_zone_report *r = report;
+	struct nvme_zns_desc *desc;
+	int i;
+
+	__u64 nr_zones = le64_to_cpu(r->nr_zones);
+
+	if (nr_zones < descs)
+		descs = nr_zones;
+
+	if (flags & NVME_JSON_BINARY)
+		return nvme_json_new_str_len_flags(report, report_size, flags);
+
+	jreport = nvme_json_new_object(flags);
+	nvme_json_add_le64(jreport, "nrzones", r->nr_zones);
+
+	jdescs = nvme_json_new_array();
+	for (i = 0; i < descs; i++) {
+		desc = (struct nvme_zns_desc *)
+			(report + sizeof(*r) + i * (sizeof(*desc) + ext_size));
+		nvme_json_add_zns_report_desc(jdescs, desc, flags);
+	}
+	json_object_object_add(jreport, "desc", jdescs);
+
+	return jreport;
 }
 
 static void nvme_show_ns_details(nvme_ns_t n)

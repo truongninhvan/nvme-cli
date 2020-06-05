@@ -24,7 +24,6 @@ static int id_ctrl(int argc, char **argv, struct command *cmd, struct plugin *pl
 
 	struct config {
 		char *output_format;
-		int verbose;
 	};
 
 	struct config cfg = {
@@ -414,16 +413,133 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 	return 0;
 }
 
+static int get_zdes(int fd, __u32 nsid)
+{
+	struct nvme_zns_id_ns ns;
+	struct nvme_id_ns id_ns;
+	__u8 lbaf;
+	int err;
+
+	err = nvme_identify_ns(fd, nsid,  &id_ns);
+	if (err) {
+		nvme_show_status("id-ns", err);
+		return err;
+	}
+
+	err = nvme_zns_identify_ns(fd, nsid,  &ns);
+	if (err) {
+		nvme_show_status("zns-id-ns", err);
+		return err;
+	}
+
+	lbaf = id_ns.flbas & NVME_NS_FLBAS_LBA_MASK;
+	return ns.lbafe[lbaf].zdes;
+}
+
 static int report_zones(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	return 0;
+	const char *desc = "Retrieve the Report Zones data structure";
+	const char *zslba = "starting lba of the zone";
+	const char *num_descs = "number of descriptors to retrieve";
+	const char *state = "state of zones to list";
+	const char *ext = "set to use the extended report zones";
+	const char *part = "set to use the partial report";
+	const char *verbose = "verbosely decode fields";
+	const char *namespace_id = "identifier of desired namespace";
+	
+	enum nvme_print_flags flags;
+	int err, fd, zdes = 0;
+	__u32 report_size;
+	void *report;
+	bool huge = false;
+
+	struct config {
+		char *output_format;
+		__u64 zslba;
+		int   namespace_id;
+		int   num_descs;
+		int   state;
+		bool  verbose;
+		bool  extended;
+		bool  partial;
+	};
+	
+	struct config cfg = {
+		.output_format = "normal",
+	};
+
+	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id", 'n', &cfg.namespace_id,  namespace_id),
+		OPT_SUFFIX("start-lba",  's', &cfg.zslba,         zslba),
+		OPT_UINT("descs",        'd', &cfg.num_descs,  num_descs),
+		OPT_UINT("state",         'S', &cfg.state,         state),
+		OPT_FMT("output-format", 'o', &cfg.output_format, output_format),
+		OPT_FLAG("verbose",      'v', &cfg.verbose,       verbose),
+		OPT_FLAG("extended",     'e', &cfg.extended,      ext),
+		OPT_FLAG("partial",      'p', &cfg.partial,       part),
+		OPT_END()
+	};
+
+	err = fd = parse_and_open(argc, argv, desc, opts);
+	if (fd < 0)
+		return errno;
+
+	err = flags = validate_output_format(cfg.output_format);
+	if (flags < 0)
+		goto close_fd;
+	if (cfg.verbose)
+		flags |= VERBOSE;
+
+	if (!cfg.namespace_id) {
+		cfg.namespace_id = nvme_get_nsid(fd);
+		if (cfg.namespace_id <= 0) {
+			if (!namespace_id) {
+				errno = EINVAL;
+				err = -1;
+			} else
+				err = cfg.namespace_id;
+			fprintf(stderr, "Error: retrieving namespace-id\n");
+			goto close_fd;
+		}
+	}
+
+	if (cfg.extended) {
+		zdes = get_zdes(fd, cfg.namespace_id);
+		if (zdes < 0) {
+			err = zdes;
+			goto close_fd;
+		}
+	}
+
+	report_size = sizeof(struct nvme_zone_report) + cfg.num_descs *
+		(sizeof(struct nvme_zns_desc) + zdes);
+
+	report = nvme_alloc(report_size, &huge);
+	if (!report) {
+		perror("malloc");
+		err = -1;
+		goto close_fd;
+	}
+
+	err = nvme_zns_report_zones(fd, cfg.namespace_id, cfg.zslba,
+		cfg.extended, cfg.state, cfg.partial, report_size, report);
+	if (!err)
+		nvme_print_object(nvme_zns_report_zones_to_json(report,
+			cfg.num_descs, zdes, report_size, flags));
+	else
+		nvme_show_status("report-zones", err);
+
+	nvme_free(report, huge);
+close_fd:
+	close(fd);
+	return nvme_status_to_errno(err, false);
 }
 
 static int zone_append(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
 	const char *desc = "The zone append command is used to write to a zone "\
-			  "using the slba of the zone, and the write will be appended from the "\
-			  "write pointer of the zone";
+		  "using the slba of the zone, and the write will be appended from the "\
+		  "write pointer of the zone";
 	const char *zslba = "starting lba of the zone";
 	const char *data = "file containing data to write";
 	const char *metadata = "file with metadata to be written";
