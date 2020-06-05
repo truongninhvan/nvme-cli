@@ -31,6 +31,7 @@
 #define VERBOSE (NVME_JSON_DECODE_COMPLEX|NVME_JSON_HUMAN)
 
 extern const char *output_format;
+extern const char *namespace_id;
 
 void register_extension(struct plugin *plugin);
 int parse_and_open(int argc, char **argv, const char *desc,

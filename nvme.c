@@ -65,6 +65,7 @@ static struct program nvme = {
 };
 
 const char *output_format = "Output format: normal|json|binary";
+const char *namespace_id = "Identifier of desired namespace";
 
 /* Name of file to output log pages in their raw format */
 static char *raw;
@@ -589,9 +590,10 @@ close_fd:
 
 static int get_endurance_log(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	struct nvme_endurance_group_log log;
 	const char *desc = "Retrieves endurance groups log page and prints the log.";
 	const char *group_id = "The endurance group identifier";
+
+	struct nvme_endurance_group_log log;
 	enum nvme_print_flags flags;
 	int err, fd;
 
@@ -798,11 +800,10 @@ close_fd:
 
 static int get_changed_ns_list_log(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	struct nvme_ns_list ns_list;
-	const char *desc = "Retrieve Changed Namespaces log for the given device "\
-			"in either decoded format "\
-			"(default) or binary.";
+	const char *desc = "Retrieve Changed Namespaces log for the given device";
 	const char *raw = "output in binary format";
+
+	struct nvme_ns_list ns_list;
 	enum nvme_print_flags flags;
 	int err, fd;
 
@@ -1043,7 +1044,7 @@ static int list_ns(int argc, char **argv, struct command *cmd, struct plugin *pl
 {
 	const char *desc = "For the specified controller handle, show the "\
 		"namespace list in the associated NVMe subsystem, optionally starting with a given nsid.";
-	const char *namespace_id = "first nsid returned list should start from";
+	const char *namespace_id = "list's first nsid should start from";
 	const char *all = "show all namespaces in the subsystem, whether attached or inactive";
 	enum nvme_print_flags flags;
 	int err, fd;
@@ -1519,7 +1520,6 @@ static int ns_descs(int argc, char **argv, struct command *cmd, struct plugin *p
 			    "given device, returns the namespace identification descriptors "\
 			    "of the specific namespace in either human-readable or binary format.";
 	const char *raw = "show descriptors in binary format";
-	const char *namespace_id = "identifier of desired namespace";
 	enum nvme_print_flags flags;
 	void *nsdescs;
 	int err, fd;
@@ -1586,7 +1586,6 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	const char *vendor_specific = "dump binary vendor fields";
 	const char *raw = "show identify in binary format";
 	const char *human_readable = "show identify in readable format";
-	const char *namespace_id = "identifier of desired namespace";
 
 	enum nvme_print_flags flags;
 	struct nvme_id_ns ns;
@@ -1942,8 +1941,7 @@ static int device_self_test(int argc, char **argv, struct command *cmd, struct p
 {
 	const char *desc  = "Implementing the device self-test feature"\
 		" which provides the necessary log to determine the state of the device";
-	const char *namespace_id = "Indicate the namespace in which the device self-test"\
-		" has to be carried out";
+	const char *namespace_id = "Indicate the namespace the for the device self-test";
 	const char * self_test_code = "This field specifies the action taken by the device self-test command : "\
 		"\n1h Start a short device self-test operation\n"\
 		"2h Start a extended device self-test operation\n"\
@@ -1988,8 +1986,7 @@ static int self_test_log(int argc, char **argv, struct command *cmd, struct plug
 	const char *desc = "Retrieve the self-test log for the given device and given test "\
 			"(or optionally a namespace) in either decoded format "\
 			"(default) or binary.";
-	const char *namespace_id = "Indicate the namespace from which the self-test "\
-				    "log has to be obtained";
+	const char *namespace_id = "The namespace for the self-test log namespace";
 	const char *verbose = "Increase output verbosity";
 
 	struct nvme_self_test_log log;
@@ -2046,7 +2043,6 @@ static int get_feature(int argc, char **argv, struct command *cmd, struct plugin
 		"are vendor-specific and not changeable. Use set-feature to "\
 		"change saveable Features.";
 	const char *raw = "show feature in binary format";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *feature_id = "feature identifier";
 	const char *sel = "[0-3]: current/default/saved/supported";
 	const char *data_len = "buffer len if data is returned through host memory buffer";
@@ -2649,7 +2645,6 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 		"given device. Can erase all data in namespace (user "\
 		"data erase) or delete data encryption key if specified. "\
 		"Can also be used to change LBAF to change the namespaces reported physical block format.";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *lbaf = "LBA format to apply (required)";
 	const char *ses = "[0-2]: secure erase";
 	const char *pil = "[0-1]: protection info location last/first 8 bytes of metadata";
@@ -2854,7 +2849,6 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 		"for each Feature are vendor-specific and may not be modified."\
 		"Use get-feature to determine which Features are supported by "\
 		"the controller and are saveable/changeable.";
-	const char *namespace_id = "desired namespace";
 	const char *feature_id = "feature identifier (required)";
 	const char *data_len = "buffer length if data required";
 	const char *data = "optional file for feature data (default stdin)";
@@ -2966,7 +2960,6 @@ static int sec_send(int argc, char **argv, struct command *cmd, struct plugin *p
 	const char *secp = "security protocol (cf. SPC-4)";
 	const char *spsp = "security-protocol-specific (cf. SPC-4)";
 	const char *tl = "transfer length (cf. SPC-4)";
-	const char *namespace_id = "desired namespace";
 	const char *nssf = "NVMe Security Specific Field";
 	int err, fd, sec_fd = -1;
 	void *sec_buf;
@@ -3055,7 +3048,6 @@ static int dir_send(int argc, char **argv, struct command *cmd, struct plugin *p
 	const char *desc = "Set directive parameters of the "\
 			    "specified directive type.";
 	const char *raw = "show directive in binary format";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *data_len = "buffer len (if) data is returned";
 	const char *dtype = "directive type";
 	const char *dspec = "directive specification associated with directive type";
@@ -3173,7 +3165,6 @@ static int write_uncor(int argc, char **argv, struct command *cmd, struct plugin
 	int err, fd;
 	const char *desc = "The Write Uncorrectable command is used to set a "\
 			"range of logical blocks to invalid.";
-	const char *namespace_id = "desired namespace";
 	const char *start_block = "64-bit LBA of first block to access";
 	const char *block_count = "number of blocks (zeroes based) on device to access";
 
@@ -3219,7 +3210,6 @@ static int write_zeroes(int argc, char **argv, struct command *cmd, struct plugi
 	__u16 control = 0;
 	const char *desc = "The Write Zeroes command is used to set a "\
 			"range of logical blocks to zero.";
-	const char *namespace_id = "desired namespace";
 	const char *start_block = "64-bit LBA of first block to access";
 	const char *block_count = "number of blocks (zeroes based) on device to access";
 	const char *limited_retry = "limit media access attempts";
@@ -3298,7 +3288,6 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 		"indicate attributes for ranges of logical blocks. This includes attributes "\
 		"for discarding unused blocks, data read and write frequency, access size, and other "\
 		"information that may be used to optimize performance and reliability.";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *blocks = "Comma separated list of the number of blocks in each range";
 	const char *starting_blocks = "Comma separated list of the starting block in each range";
 	const char *context_attrs = "Comma separated list of the context attributes in each range";
@@ -3379,7 +3368,6 @@ static int flush(int argc, char **argv, struct command *cmd, struct plugin *plug
 		"finished before the flush was submitted. Additional data may also be "\
 		"flushed by the controller, from any namespace, depending on controller and "\
 		"associated namespace status.";
-	const char *namespace_id = "identifier of desired namespace";
 	int err, fd;
 
 	struct config {
@@ -3422,7 +3410,6 @@ static int resv_acquire(int argc, char **argv, struct command *cmd, struct plugi
 		"with that namespace. Namespace reservation will abort with "\
 		"status Reservation Conflict if the given namespace is "\
 		"already reserved.";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *crkey = "current reservation key";
 	const char *prkey = "pre-empt reservation key";
 	const char *rtype = "reservation type";
@@ -3482,7 +3469,6 @@ static int resv_register(int argc, char **argv, struct command *cmd, struct plug
 	const char *desc = "Register, de-register, or "\
 		"replace a controller's reservation on a given namespace. "\
 		"Only one reservation at a time is allowed on any namespace.";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *crkey = "current reservation key";
 	const char *iekey = "ignore existing res. key";
 	const char *nrkey = "new reservation key";
@@ -3553,7 +3539,6 @@ static int resv_release(int argc, char **argv, struct command *cmd, struct plugi
 		"effect. If the reservation type is not Write Exclusive or "\
 		"Exclusive Access, all registrants on the namespace except "\
 		"the issuing controller are notified.";
-	const char *namespace_id = "desired namespace";
 	const char *crkey = "current reservation key";
 	const char *iekey = "ignore existing res. key";
 	const char *rtype = "reservation type";
@@ -3612,7 +3597,6 @@ static int resv_report(int argc, char **argv, struct command *cmd, struct plugin
 		"status of a given namespace. Namespace Reservation Status "\
 		"depends on the number of controllers registered for that "\
 		"namespace.";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *s = "number of bytes to transfer";
 	const char *eds = "request extended data structure";
 	const char *raw = "dump output in binary format";
@@ -3723,7 +3707,6 @@ static int submit_io(int opcode, char *command, const char *desc,
 	const char *dtype = "directive type (for write-only)";
 	const char *dspec = "directive specific (for write-only)";
 	const char *dsm = "dataset management attributes (lower 16 bits)";
-	const char *namespace_id = "desired namespace";
 
 	struct config {
 		__u64 start_block;
@@ -3968,7 +3951,6 @@ static int verify_cmd(int argc, char **argv, struct command *cmd, struct plugin 
 	int err, fd;
 	__u16 control = 0;
 	const char *desc = "Verify specified logical blocks on the given device.";
-	const char *namespace_id = "desired namespace";
 	const char *start_block = "64-bit LBA of first block to access";
 	const char *block_count = "number of blocks (zeroes based) on device to access";
 	const char *limited_retry = "limit media access attempts";
@@ -4050,7 +4032,6 @@ static int sec_recv(int argc, char **argv, struct command *cmd, struct plugin *p
 	const char *spsp = "security-protocol-specific (cf. SPC-4)";
 	const char *al = "allocation length (cf. SPC-4)";
 	const char *raw = "dump output in binary format";
-	const char *namespace_id = "desired namespace";
 	const char *nssf = "NVMe Security Specific Field";
 	int err, fd;
 	void *sec_buf = NULL;
@@ -4190,7 +4171,6 @@ static int dir_receive(int argc, char **argv, struct command *cmd, struct plugin
 	const char *desc = "Read directive parameters of the "\
 			    "specified directive type.";
 	const char *raw = "show directive in binary format";
-	const char *namespace_id = "identifier of desired namespace";
 	const char *data_len = "buffer len (if) data is returned";
 	const char *dtype = "directive type";
 	const char *dspec = "directive specification associated with directive type";
@@ -4307,7 +4287,6 @@ static int passthru(int argc, char **argv, bool admin, const char *desc, struct 
 	const char *opcode = "opcode (required)";
 	const char *flags = "command flags";
 	const char *rsvd = "value for reserved field";
-	const char *namespace_id = "desired namespace";
 	const char *data_len = "data I/O length (bytes)";
 	const char *metadata_len = "metadata seg. length (bytes)";
 	const char *timeout = "timeout value, in milliseconds";

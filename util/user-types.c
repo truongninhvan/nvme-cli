@@ -8,6 +8,7 @@
 #include <json-c/json.h>
 #include <uuid/uuid.h>
 
+#include <ccan/minmax/minmax.h>
 #include <ccan/array_size/array_size.h>
 
 #include "user-types.h"
@@ -534,7 +535,7 @@ static int __display_human_size(struct json_object *o, struct printbuf *p,
 {
 	uint16_t i = 0, major = 0, minor = 0, jmajor = 0, jminor = 0;
 	uint64_t v = json_object_get_int64(o);
-	
+
 	util_split(v, &i, &major, &minor, &jmajor, &jminor);
 	return sprintbuf(p, "%u.%02u %s (%lu.%03lu %s)", major, minor, iec[i],
 		jmajor, jminor, jedec[i]);
@@ -555,7 +556,7 @@ static int _display_human_size(struct json_object *o, struct printbuf *p,
 {
 	uint64_t v = json_object_get_int64(o);
 	uint16_t i = 0, major = 0, minor = 0;
-	
+
 	util_split(v, &i, &major, &minor, NULL, NULL);
 	if (minor)
 		return sprintbuf(p, "%u.%02u %s", major, minor, iec[i]);
@@ -980,7 +981,7 @@ static int display_tree(struct json_object *jso, struct printbuf *p,
 
 	if (i > 1)
 		char_stack[l] = '|';
-	else	
+	else
 		char_stack[l] = ' ';
 
 	//printf("%s %d child objects\n", __func__, i);
@@ -2138,7 +2139,7 @@ static void nvme_json_add_id_ctrl_psd_human(struct json_object *j,
 	switch (ips) {
 	case 1:
 		break;
-	case 2:	
+	case 2:
 		idlp *= 100;
 		break;
 	default:
@@ -2149,7 +2150,7 @@ static void nvme_json_add_id_ctrl_psd_human(struct json_object *j,
 	switch (aps) {
 	case 1:
 		break;
-	case 2:	
+	case 2:
 		actp *= 100;
 		break;
 	default:
@@ -3425,7 +3426,7 @@ struct json_object *nvme_ns_list_to_json(
 
 	jlist = nvme_json_new_object(flags);
 	jarray = nvme_json_new_array();
-	for (i = 0; i < 1024; i++) {
+	for (i = 0; i < NVME_ID_NS_LIST_MAX; i++) {
 		struct json_object *jnsid;
 		__u32 nsid;
 
@@ -3437,6 +3438,34 @@ struct json_object *nvme_ns_list_to_json(
 		json_object_array_add(jarray, jnsid);
 	}
 	json_object_object_add(jlist, "nsids", jarray);
+
+	return jlist;
+}
+
+struct json_object *nvme_zns_changed_to_json(
+	struct nvme_zns_changed_zone_log *log, unsigned long flags)
+{
+	struct json_object *jlist, *jarray;
+	uint16_t nrzid;
+	int i;
+
+	if (flags & NVME_JSON_BINARY)
+		return nvme_json_new_str_len_flags(log, sizeof(*log), flags);
+
+	jlist = nvme_json_new_object(flags);
+	jarray = nvme_json_new_array();
+
+	nrzid = le16_to_cpu(log->nrzid);
+
+	nvme_json_add_int(jlist, "nr-zone-ids", nrzid);
+	if (nrzid == 0xffff)
+		return jlist;
+
+	for (i = 0; i < min(nrzid, (uint16_t)NVME_ZNS_CHANGED_ZONES_MAX); i++)
+		json_object_array_add(jarray, nvme_json_new_int64(
+			le64_to_cpu(log->zid[i])));
+
+	json_object_object_add(jlist, "zone-ids", jarray);
 
 	return jlist;
 }

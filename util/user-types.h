@@ -143,6 +143,9 @@ struct json_object *nvme_zns_id_ns_to_json( struct nvme_zns_id_ns *ns,
 struct json_object *nvme_zns_report_zones_to_json(void *report, __u32 descs,
 	__u8 ext_size, __u32 report_size, unsigned long flags);
 
+struct json_object *nvme_zns_changed_to_json(
+	struct nvme_zns_changed_zone_log *log, unsigned long flags);
+
 struct json_object *nvme_json_new_str_len(const char *v, int len);
 struct json_object *nvme_json_new_str_len_flags(const void *v, int len,
 	unsigned long flags);
