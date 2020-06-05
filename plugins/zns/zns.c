@@ -20,7 +20,7 @@ static int id_ctrl(int argc, char **argv, struct command *cmd, struct plugin *pl
 
 	enum nvme_print_flags flags;
 	struct nvme_zns_id_ctrl ctrl;
-	int err, fd;
+	int fd, err = -1;
 
 	struct config {
 		char *output_format;
@@ -35,7 +35,7 @@ static int id_ctrl(int argc, char **argv, struct command *cmd, struct plugin *pl
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
@@ -64,7 +64,7 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	enum nvme_print_flags flags;
 	struct nvme_zns_id_ns ns;
 	struct nvme_id_ns id_ns;
-	int err, fd;
+	int fd, err = -1;
 
 	struct config {
 		char *output_format;
@@ -83,11 +83,11 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
-	err = flags = validate_output_format(cfg.output_format);
+	flags = validate_output_format(cfg.output_format);
 	if (flags < 0)
 		goto close_fd;
 	if (cfg.verbose)
@@ -178,7 +178,6 @@ static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plug
 			zsa, (uint64_t)zslba, cfg.namespace_id);
 	else
 		nvme_show_status(command, err);
-
 free:
 	free(command);
 	return nvme_status_to_errno(err, false);
@@ -194,7 +193,7 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 	const char *data_len = "buffer length if data required";
 	const char *data = "optional file for data (default stdin)";
 
-	int err, fd, ffd = STDIN_FILENO;
+	int fd, ffd = STDIN_FILENO, err = -1;
 	void *buf = NULL;
 
 	struct config {
@@ -219,14 +218,13 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
 	if (cfg.data_len) {
 		if (posix_memalign(&buf, getpagesize(), cfg.data_len)) {
 			fprintf(stderr, "can not allocate feature payload\n");
-			err = -1;
 			goto close_fd;
 		}
 		memset(buf, 0, cfg.data_len);
@@ -235,7 +233,6 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 			ffd = open(cfg.file, O_RDONLY);
 			if (ffd < 0) {
 				perror(cfg.file);
-				err = -1;
 				goto free;
 			}
 		}
@@ -243,7 +240,6 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 		err = read(ffd, (void *)buf, cfg.data_len);
 		if (err < 0) {
 			perror("read");
-			err = -1;
 			goto close_ffd;
 		}
 	}
@@ -309,7 +305,7 @@ static int set_zone_desc(int argc, char **argv, struct command *cmd, struct plug
 	const char *namespace_id = "identifier of desired namespace";
 	const char *data = "optional file for zone extention data (default stdin)";
 
-	int err, fd, ffd = STDIN_FILENO;
+	int fd, ffd = STDIN_FILENO, err;
 	struct nvme_zns_id_ns ns;
 	struct nvme_id_ns id_ns;
 	void *buf = NULL;
@@ -332,7 +328,7 @@ static int set_zone_desc(int argc, char **argv, struct command *cmd, struct plug
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
@@ -377,7 +373,6 @@ static int set_zone_desc(int argc, char **argv, struct command *cmd, struct plug
 	err = read(ffd, (void *)buf, data_len);
 	if (err < 0) {
 		perror("read");
-		err = -1;
 		goto close_ffd;
 	}
 
@@ -438,7 +433,7 @@ static int report_zones(int argc, char **argv, struct command *cmd, struct plugi
 	const char *namespace_id = "identifier of desired namespace";
 	
 	enum nvme_print_flags flags;
-	int err, fd, zdes = 0;
+	int fd, zdes = 0, err = -1;
 	__u32 report_size;
 	void *report;
 	bool huge = false;
@@ -470,11 +465,11 @@ static int report_zones(int argc, char **argv, struct command *cmd, struct plugi
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
-	err = flags = validate_output_format(cfg.output_format);
+	flags = validate_output_format(cfg.output_format);
 	if (flags < 0)
 		goto close_fd;
 	if (cfg.verbose)
@@ -537,7 +532,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 	const char *metadata_size = "size of metadata in bytes";
 	const char *data_size = "size of data in bytes";
 
-	int err = 0, fd, dfd = STDIN_FILENO, mfd = STDIN_FILENO;
+	int err = -1, fd, dfd = STDIN_FILENO, mfd = STDIN_FILENO;
 	unsigned int lba_size, meta_size;
 	void *buf = NULL, *mbuf = NULL;
 	__u16 nblocks, control = 0;
@@ -577,14 +572,13 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		OPT_END()
 	};
 
-	err = fd = parse_and_open(argc, argv, desc, opts);
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
 
 	if (!cfg.data_size) {
 		fprintf(stderr, "Append size not provided\n");
 		errno = EINVAL;
-		err = -1;
 		goto close_fd;
 	}
 
@@ -593,7 +587,6 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		fprintf(stderr, "Failed to open requested namespace:%s\n",
 			devicename);
 		errno = EINVAL;
-		err = -1;
 		goto close_fd;
 	}
 
@@ -603,7 +596,6 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 			"Data size:%#"PRIx64" not aligned to lba size:%#x\n",
 			(uint64_t)cfg.data_size, lba_size);
 		errno = EINVAL;
-		err = -1;
 		goto close_ns;
 	}
 
@@ -613,14 +605,12 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 			"Metadata size:%#"PRIx64" not aligned to metadata size:%#x\n",
 			(uint64_t)cfg.metadata_size, meta_size);
 		errno = EINVAL;
-		err = -1;
 		goto close_ns;
 	}
 
 	if (cfg.prinfo > 0xf) {
 	        fprintf(stderr, "Invalid value for prinfo:%#x\n", cfg.prinfo);
 		errno = EINVAL;
-		err = -1;
 		goto close_ns;
 	}
 
@@ -628,7 +618,6 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		dfd = open(cfg.data, O_RDONLY);
 		if (dfd < 0) {
 			perror(cfg.data);
-			err = -1;
 			goto close_ns;
 		}
 	}
@@ -636,7 +625,6 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 	if (posix_memalign(&buf, getpagesize(), cfg.data_size)) {
 		fprintf(stderr, "No memory for data size:%"PRIx64"\n",
 			(uint64_t)cfg.data_size);
-		err = -1;
 		goto close_dfd;
 	}
 
