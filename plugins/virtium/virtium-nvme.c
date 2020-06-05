@@ -257,8 +257,8 @@ static int vt_add_entry_to_log(const int fd, const char *path, const struct vtvi
 {
 	struct vtview_smart_log_entry smart;
 	char filename[256] = "";
+	unsigned int nsid = 0;
 	int ret = 0;
-	int nsid = 0;
 
 	memset(smart.path, 0, sizeof(smart.path));
 	strcpy(smart.path, path);
@@ -268,11 +268,11 @@ static int vt_add_entry_to_log(const int fd, const char *path, const struct vtvi
 		strcpy(filename, cfg->output_file);
 
 	smart.time_stamp = time(NULL);
-	nsid = nvme_get_nsid(fd);
 
-	if (nsid <= 0) {
-		printf("Cannot read namespace-id\n");
-		return -1;
+	ret = nvme_get_nsid(fd, &nsid);
+	if (ret < 0) {
+		perror("get-namespace-id");
+		return ret;
 	}
 
 	ret = nvme_identify_ns(fd, nsid, &smart.raw_ns);

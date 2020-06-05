@@ -1136,13 +1136,9 @@ static int delete_ns(int argc, char **argv, struct command *cmd, struct plugin *
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id == 0) {
-			err = -EINVAL;
-			goto close_fd;
-		}
-		else if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -1572,9 +1568,9 @@ static int ns_descs(int argc, char **argv, struct command *cmd, struct plugin *p
 		flags = 0;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -1614,7 +1610,7 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	int err, fd;
 
 	struct config {
-		int   namespace_id;
+		__u32 namespace_id;
 		int   vendor_specific;
 		int   raw_binary;
 		int   human_readable;
@@ -1651,14 +1647,9 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 		flags |= VERBOSE;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			fprintf(stderr,
-				"Error: requesting namespace-id from non-block device\n");
-			err = cfg.namespace_id;
-			goto close_fd;
-		} else if (!cfg.namespace_id) {
-			err = -EINVAL;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -1828,8 +1819,9 @@ close_fd:
 
 static int get_ns_id(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	int err = 0, nsid, fd;
 	const char *desc = "Get namespce ID of a the block device.";
+	int err, fd;
+	__u32 nsid;
 
 	OPT_ARGS(opts) = {
 		OPT_END()
@@ -1837,21 +1829,16 @@ static int get_ns_id(int argc, char **argv, struct command *cmd, struct plugin *
 
 	err = fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
-		goto ret;
+		return errno;
 
-	nsid = nvme_get_nsid(fd);
-	if (nsid <= 0) {
+	err = nvme_get_nsid(fd, &nsid);
+	if (!err)
+		printf("%s: namespace-id:%u\n", devicename, nsid);
+	else
 		perror(devicename);
-		err = errno;
-		goto close_fd;
-	}
-	err = 0;
-	printf("%s: namespace-id:%d\n", devicename, nsid);
 
-close_fd:
 	close(fd);
-ret:
-	return nvme_status_to_errno(err, false);
+	return !err ? 0 : errno;
 }
 
 static int virtual_mgmt(int argc, char **argv, struct command *cmd, struct plugin *plugin)
@@ -2780,9 +2767,9 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 		cfg.namespace_id = NVME_NSID_ALL;
 	} else {
 		if (!cfg.namespace_id) {
-			cfg.namespace_id = nvme_get_nsid(fd);
-			if (cfg.namespace_id < 0) {
-				err = cfg.namespace_id;
+			err = nvme_get_nsid(fd, &cfg.namespace_id);
+			if (err < 0) {
+				perror("get-namespace-id");
 				goto close_fd;
 			}
 		}
@@ -3153,9 +3140,9 @@ static int dir_send(int argc, char **argv, struct command *cmd, struct plugin *p
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3247,9 +3234,9 @@ static int write_uncor(int argc, char **argv, struct command *cmd, struct plugin
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3327,9 +3314,9 @@ static int write_zeroes(int argc, char **argv, struct command *cmd, struct plugi
 	if (cfg.deac)
 		control |= NVME_IO_DEAC;
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3406,9 +3393,9 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 	}
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3453,9 +3440,9 @@ static int flush(int argc, char **argv, struct command *cmd, struct plugin *plug
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3510,9 +3497,9 @@ static int resv_acquire(int argc, char **argv, struct command *cmd, struct plugi
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3571,9 +3558,9 @@ static int resv_register(int argc, char **argv, struct command *cmd, struct plug
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3640,9 +3627,9 @@ static int resv_release(int argc, char **argv, struct command *cmd, struct plugi
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3710,9 +3697,9 @@ static int resv_report(int argc, char **argv, struct command *cmd, struct plugin
 		flags = 0;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -3797,7 +3784,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		__u16 dsmgmt;
 		__u16 app_tag_mask;
 		__u16 app_tag;
-		int   namespace_id;
+		__u32 namespace_id;
 		int   limited_retry;
 		int   force_unit_access;
 		int   show;
@@ -3835,9 +3822,9 @@ static int submit_io(int opcode, char *command, const char *desc,
 		goto ret;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id <= 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -4088,9 +4075,9 @@ static int verify_cmd(int argc, char **argv, struct command *cmd, struct plugin 
 		control |= NVME_IO_FUA;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id < 0) {
-			err = cfg.namespace_id;
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}

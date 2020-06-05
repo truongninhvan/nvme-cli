@@ -57,14 +57,14 @@ enum {
 static const char *dev_path = "/dev/";
 
 struct smdevice_info {
-	int			nsid;
+	unsigned int		nsid;
 	struct nvme_id_ctrl	ctrl;
 	struct nvme_id_ns	ns;
 	char			dev[265];
 };
 
 struct ontapdevice_info {
-	int			nsid;
+	unsigned int		nsid;
 	struct nvme_id_ctrl	ctrl;
 	struct nvme_id_ns	ns;
 	char			nsdesc[4096];
@@ -403,7 +403,12 @@ static int netapp_smdevices_get_info(int fd, struct smdevice_info *item,
 	if (strncmp("NetApp E-Series", item->ctrl.mn, 15) != 0)
 		return 0; /* not the right model of controller */
 
-	item->nsid = nvme_get_nsid(fd);
+	err = nvme_get_nsid(fd, &item->nsid);
+	if (err < 0) {
+		perror("get-namespace-id");
+		return err;
+	}
+	
 	err = nvme_identify_ns(fd, item->nsid, &item->ns);
 	if (err) {
 		fprintf(stderr, "Unable to identify namespace for %s (%s)\n",
@@ -431,7 +436,11 @@ static int netapp_ontapdevices_get_info(int fd, struct ontapdevice_info *item,
 		/* not the right controller model */
 		return 0;
 
-	item->nsid = nvme_get_nsid(fd);
+	err = nvme_get_nsid(fd, &item->nsid);
+	if (err < 0) {
+		perror("get-namespace-id");
+		return err;
+	}
 
 	err = nvme_identify_ns(fd, item->nsid, &item->ns);
 	if (err) {

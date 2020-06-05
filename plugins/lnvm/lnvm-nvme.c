@@ -1129,7 +1129,11 @@ static int lnvm_chunk_log(int argc, char **argv, struct command *cmd, struct plu
 	else if (cfg.human_readable)
 		flags |= VERBOSE;
 
-	nsid = nvme_get_nsid(fd);
+	err = nvme_get_nsid(fd, &nsid);
+	if (err < 0) {
+		perror("get-namespace-id");
+		goto close;
+	}
 
 	/*
 	 * It needs to figure out how many bytes will be requested by this

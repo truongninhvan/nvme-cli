@@ -68,7 +68,7 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 
 	struct config {
 		char *output_format;
-		int namespace_id;
+		__u32 namespace_id;
 		int verbose;
 	};
 
@@ -94,14 +94,9 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 		flags |= VERBOSE;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id <= 0) {
-			if (!namespace_id) {
-				errno = EINVAL;
-				err = -1;
-			} else
-				err = cfg.namespace_id;
-			fprintf(stderr, "Error: retrieving namespace-id\n");
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -128,14 +123,9 @@ static int __zns_mgmt_send(int fd, __u32 namespace_id, __u64 zslba,
 	int err;
 
 	if (!namespace_id) {
-		namespace_id = nvme_get_nsid(fd);
-		if (namespace_id <= 0) {
-			if (!namespace_id) {
-				errno = EINVAL;
-				err = -1;
-			} else
-				err = namespace_id;
-			fprintf(stderr, "Error: retrieving namespace-id\n");
+		err = nvme_get_nsid(fd, &namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -456,7 +446,7 @@ static int report_zones(int argc, char **argv, struct command *cmd, struct plugi
 	struct config {
 		char *output_format;
 		__u64 zslba;
-		int   namespace_id;
+		__u32 namespace_id;
 		int   num_descs;
 		int   state;
 		bool  verbose;
@@ -491,14 +481,9 @@ static int report_zones(int argc, char **argv, struct command *cmd, struct plugi
 		flags |= VERBOSE;
 
 	if (!cfg.namespace_id) {
-		cfg.namespace_id = nvme_get_nsid(fd);
-		if (cfg.namespace_id <= 0) {
-			if (!namespace_id) {
-				errno = EINVAL;
-				err = -1;
-			} else
-				err = cfg.namespace_id;
-			fprintf(stderr, "Error: retrieving namespace-id\n");
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
 			goto close_fd;
 		}
 	}
@@ -594,7 +579,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 
 	err = fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
-	        return errno;
+		return errno;
 
 	if (!cfg.data_size) {
 		fprintf(stderr, "Append size not provided\n");
