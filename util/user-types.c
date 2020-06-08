@@ -72,9 +72,10 @@ static const char *arg_str(const char * const *strings,
 }
 
 static const char * const features_sels[] = {
-	[NVME_GET_FEATURES_SEL_CURRENT]	= "current",
-	[NVME_GET_FEATURES_SEL_DEFAULT]	= "default",
-	[NVME_GET_FEATURES_SEL_SAVED]	= "saved",
+	[NVME_GET_FEATURES_SEL_CURRENT]		= "current",
+	[NVME_GET_FEATURES_SEL_DEFAULT]		= "default",
+	[NVME_GET_FEATURES_SEL_SAVED]		= "saved",
+	[NVME_GET_FEATURES_SEL_SUPPORTED]	= "supported",
 };
 
 const char *nvme_get_feature_select_to_string(__u8 sel)
