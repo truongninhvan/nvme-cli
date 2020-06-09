@@ -2122,7 +2122,7 @@ static int get_feature(int argc, char **argv, struct command *cmd, struct plugin
 	err = nvme_get_features(fd, cfg.feature_id, cfg.namespace_id, cfg.sel, cfg.cdw11,
 			0, cfg.data_len, buf, &result);
 	if (!err)
-		nvme_feature_show_fields(cfg.feature_id, result, buf, 0);
+		nvme_feature_show_fields(cfg.feature_id, result, buf, flags);
 	else
 		nvme_show_status("get-feature", err);
 
