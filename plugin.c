@@ -171,8 +171,10 @@ int handle_plugin(int argc, char **argv, struct plugin *plugin)
 		extension = extension->next;
 	}
 
-	/* If the command is executed with the extension name and
-	 * command together ("plugin-command"), run the plug in */
+	/*
+	 * If the command is executed with the extension name and
+	 * command together ("plugin-command"), run the plug in
+	 */
 	extension = plugin->next;
 	while (extension) {
 		if (!strncmp(str, extension->name, strlen(extension->name))) {

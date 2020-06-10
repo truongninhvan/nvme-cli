@@ -116,30 +116,18 @@ close_fd:
 	return nvme_status_to_errno(err, false);
 }
 
-static int __zns_mgmt_send(int fd, __u32 namespace_id, __u64 zslba,
-	bool select_all, enum nvme_zns_send_action zsa, __u32 data_len, void *buf)
-{
-	int err;
-
-	err = nvme_zns_mgmt_send(fd, namespace_id, zslba, select_all, zsa,
-			data_len, buf);
-close_fd:
-	close(fd);
-	return err;
-}
-
 static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plugin *plugin,
 	const char *desc, enum nvme_zns_send_action zsa)
 {
 	const char *zslba = "starting lba of the zone for this command";
 	const char *select_all = "send command to all zones";
 
-	int err, fd;
 	char *command;
+	int err, fd;
 
 	struct config {
 		__u64	zslba;
-		int	namespace_id;
+		__u32	namespace_id;
 		bool	select_all;
 	};
 
@@ -169,7 +157,7 @@ static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plug
 		}
 	}
 
-	err = __zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba,
+	err = nvme_zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba,
 		cfg.select_all, zsa, 0, NULL);
 	if (!err)
 		printf("%s: Success, action:%d zone:%"PRIx64" nsid:%d\n", command,
@@ -178,6 +166,8 @@ static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plug
 		nvme_show_status(command, err);
 free:
 	free(command);
+close_fd:
+	close(fd);
 	return nvme_status_to_errno(err, false);
 }
 
@@ -195,7 +185,7 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 
 	struct config {
 		__u64	zslba;
-		int	namespace_id;
+		__u32	namespace_id;
 		bool	select_all;
 		__u8	zsa;
 		__u32   data_len;
@@ -249,8 +239,8 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 		}
 	}
 
-	err = __zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba, cfg.select_all,
-			cfg.zsa, cfg.data_len, buf);
+	err = nvme_zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba,
+		cfg.select_all, cfg.zsa, cfg.data_len, buf);
 	if (!err)
 		printf("zone-mgmt-send: Success, action:%d zone:%"PRIx64" nsid:%d\n",
 			cfg.zsa, (uint64_t)cfg.zslba, cfg.namespace_id);
@@ -318,7 +308,7 @@ static int set_zone_desc(int argc, char **argv, struct command *cmd, struct plug
 
 	struct config {
 		__u64	zslba;
-		int	namespace_id;
+		__u32	namespace_id;
 		char   *file;
 	};
 
@@ -380,8 +370,8 @@ static int set_zone_desc(int argc, char **argv, struct command *cmd, struct plug
 		goto close_ffd;
 	}
 
-	err = __zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba, 0,
-		NVME_ZNS_ZSA_SET_DESC_EXT, data_len, buf);
+	err = nvme_zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba,
+		0,  NVME_ZNS_ZSA_SET_DESC_EXT, data_len, buf);
 	if (!err)
 		printf("set-zone-desc: Success, zone:%"PRIx64" nsid:%d\n",
 			(uint64_t)cfg.zslba, cfg.namespace_id);
@@ -399,11 +389,18 @@ close_fd:
 
 static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	const char *desc = "Zone Management Receive";
+	const char *desc = "Generic Zone Management Receive. This will not " \
+		"perform any special decoding of any returned data.";
+	const char *zslba = "starting lba of the zone";
+	const char *data_len = "received data buffer length";
+	const char *data = "optional file for saving data (default stdout)";
+	const char *zra = "Zone Receive Action";
+	const char *zrasf = "Zone Receive Action Specific field";
+	const char *zrass = "Enable Zone Receive Action Specific features";
 
 	enum nvme_print_flags flags;
-	int fd, err = -1;
-	void *data = NULL;
+	int fd, ffd = STDOUT_FILENO, err = -1;
+	void *buf = NULL;
 
 	struct config {
 		char *output_format;
@@ -413,6 +410,7 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 		__u16  zrasf;
 		bool   zrass;
 		__u32  data_len;
+		char   *file;
 	};
 
 	struct config cfg = {
@@ -420,6 +418,14 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 	};
 
 	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id", 'n', &cfg.namespace_id, namespace_id),
+		OPT_SUFFIX("start-lba",  's', &cfg.zslba,        zslba),
+		OPT_UINT("data-len",     'l', &cfg.data_len,     data_len),
+		OPT_FILE("data",         'd', &cfg.file,         data),
+		OPT_SHRT("zra",          'z', &cfg.zra,          zra),
+		OPT_SHRT("zrasf",        'a', &cfg.zrasf,        zrasf),
+		OPT_FLAG("zra-spec-feat",'f', &cfg.zrass,        zrass),
+		OPT_FMT("output-format", 'o', &cfg.output_format, output_format),
 		OPT_END()
 	};
 
@@ -440,23 +446,38 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 	}
 
 	if (cfg.data_len) {
-		data = calloc(1, cfg.data_len);
-		if (!data) {
+		buf = calloc(1, cfg.data_len);
+		if (!buf) {
 			err = -1;
 			goto close_fd;
 		}
 	}
 
+	if (cfg.file) {
+		ffd = open(cfg.file, O_RDWR);
+		if (ffd < 0) {
+			perror(cfg.file);
+			goto free;
+		}
+	}
+
 	err = nvme_zns_mgmt_recv(fd, cfg.namespace_id, cfg.zslba, cfg.zra,
-		cfg.zrasf, cfg.zrass, cfg.data_len, data);
-	if (!err)
-		printf("zone-mgmt-recv: Success, action:%d zone:%"PRIx64" nsid:%d\n",
+		cfg.zrasf, cfg.zrass, cfg.data_len, buf);
+	if (!err) {
+		fprintf(stderr, "zone-mgmt-recv: Success, action:%d zone:%"PRIx64" nsid:%d\n",
 			cfg.zra, (uint64_t)cfg.zslba, cfg.namespace_id);
-	else
+		if (buf) {
+			if (flags & NVME_JSON_BINARY)
+				write(ffd, buf, cfg.data_len);
+			else
+				d(buf, cfg.data_len, 16, 4);
+		}
+	} else
 		nvme_show_status("zone-mgmt-recv", err);
 
-	if (data)
-		free(data);
+free:
+	if (buf)
+		free(buf);
 close_fd:
 	close(fd);
 	return nvme_status_to_errno(err, false);
@@ -487,7 +508,7 @@ static int get_zdes(int fd, __u32 nsid)
 
 static int report_zones(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	const char *desc = "Retrieve the Report Zones data structure";
+	const char *desc = "Retrieve and display the Report Zones data structure";
 	const char *zslba = "starting lba of the zone";
 	const char *num_descs = "number of descriptors to retrieve";
 	const char *state = "state of zones to list";
@@ -497,9 +518,9 @@ static int report_zones(int argc, char **argv, struct command *cmd, struct plugi
 
 	enum nvme_print_flags flags;
 	int fd, zdes = 0, err = -1;
+	bool huge = false;
 	__u32 report_size;
 	void *report;
-	bool huge = false;
 
 	struct config {
 		char *output_format;
@@ -743,7 +764,8 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 			      cfg.data_size, buf, cfg.metadata_size, mbuf,
 			      &result);
 	if (!err)
-		printf("Success appended data to LBA %"PRIx64"\n", (uint64_t)result);
+		printf("%s: Success appended data to LBA %"PRIx64"\n",
+			devicename, (uint64_t)result);
 	else
 		nvme_show_status("zone-append", err);
 free_meta:
