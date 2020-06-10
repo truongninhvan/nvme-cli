@@ -121,14 +121,6 @@ static int __zns_mgmt_send(int fd, __u32 namespace_id, __u64 zslba,
 {
 	int err;
 
-	if (!namespace_id) {
-		err = nvme_get_nsid(fd, &namespace_id);
-		if (err < 0) {
-			perror("get-namespace-id");
-			goto close_fd;
-		}
-	}
-
 	err = nvme_zns_mgmt_send(fd, namespace_id, zslba, select_all, zsa,
 			data_len, buf);
 close_fd:
@@ -169,11 +161,19 @@ static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plug
 	if (fd < 0)
 		goto free;
 
+	if (!cfg.namespace_id) {
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
+			goto close_fd;
+		}
+	}
+
 	err = __zns_mgmt_send(fd, cfg.namespace_id, cfg.zslba,
 		cfg.select_all, zsa, 0, NULL);
 	if (!err)
 		printf("%s: Success, action:%d zone:%"PRIx64" nsid:%d\n", command,
-			zsa, (uint64_t)zslba, cfg.namespace_id);
+			zsa, (uint64_t)cfg.zslba, cfg.namespace_id);
 	else
 		nvme_show_status(command, err);
 free:
@@ -218,6 +218,14 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return errno;
+
+	if (!cfg.namespace_id) {
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
+			goto close_fd;
+		}
+	}
 
 	if (cfg.data_len) {
 		if (posix_memalign(&buf, getpagesize(), cfg.data_len)) {
@@ -410,7 +418,6 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 	struct config cfg = {
 		.output_format = "normal",
 	};
-
 
 	OPT_ARGS(opts) = {
 		OPT_END()
@@ -739,9 +746,9 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		printf("Success appended data to LBA %"PRIx64"\n", (uint64_t)result);
 	else
 		nvme_show_status("zone-append", err);
-
 free_meta:
-	free(mbuf);
+	if (mbuf)
+		free(mbuf);
 close_mfd:
 	if (cfg.metadata)
 		close(mfd);
