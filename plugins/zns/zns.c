@@ -594,7 +594,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 	__u16 nblocks, control = 0;
 	__u64 result;
 
-	nvme_ns_t ns;
+	struct nvme_id_ns ns;
 
 	struct config {
 		char  *data;
@@ -602,6 +602,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		__u64  zslba;
 		__u64  data_size;
 		__u64  metadata_size;
+		__u32  namespace_id;
 		int    limited_retry;
 		int    fua;
 		__u32  ref_tag;
@@ -614,6 +615,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 	};
 
 	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id",      'n', &cfg.namespace_id,  namespace_id),
 	        OPT_SUFFIX("zslba",           's', &cfg.zslba,         zslba),
 	        OPT_SUFFIX("data-size",       'z', &cfg.data_size,     data_size),
 	        OPT_SUFFIX("metadata-size",   'y', &cfg.metadata_size, metadata_size),
@@ -638,43 +640,49 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 		goto close_fd;
 	}
 
-	ns = nvme_scan_namespace(devicename);
-	if (!ns) {
-		fprintf(stderr, "Failed to open requested namespace:%s\n",
-			devicename);
-		errno = EINVAL;
+	if (!cfg.namespace_id) {
+		err = nvme_get_nsid(fd, &cfg.namespace_id);
+		if (err < 0) {
+			perror("get-namespace-id");
+			goto close_fd;
+		}
+	}
+
+	err = nvme_identify_ns(fd, cfg.namespace_id, &ns);
+	if (err) {
+		nvme_show_status("id-ns", err);
 		goto close_fd;
 	}
 
-	lba_size = nvme_ns_get_lba_size(ns);
+	lba_size = 1 << ns.lbaf[(ns.flbas & 0x0f)].ds;
 	if (cfg.data_size & (lba_size - 1)) {
 		fprintf(stderr,
 			"Data size:%#"PRIx64" not aligned to lba size:%#x\n",
 			(uint64_t)cfg.data_size, lba_size);
 		errno = EINVAL;
-		goto close_ns;
+		goto close_fd;
 	}
 
-	meta_size = nvme_ns_get_meta_size(ns);
+	meta_size = ns.lbaf[(ns.flbas & 0x0f)].ms;
 	if (meta_size && (!cfg.metadata_size || cfg.metadata_size % meta_size)) {
 		fprintf(stderr,
 			"Metadata size:%#"PRIx64" not aligned to metadata size:%#x\n",
 			(uint64_t)cfg.metadata_size, meta_size);
 		errno = EINVAL;
-		goto close_ns;
+		goto close_fd;
 	}
 
 	if (cfg.prinfo > 0xf) {
 	        fprintf(stderr, "Invalid value for prinfo:%#x\n", cfg.prinfo);
 		errno = EINVAL;
-		goto close_ns;
+		goto close_fd;
 	}
 
 	if (cfg.data) {
 		dfd = open(cfg.data, O_RDONLY);
 		if (dfd < 0) {
 			perror(cfg.data);
-			goto close_ns;
+			goto close_fd;
 		}
 	}
 
@@ -723,9 +731,7 @@ static int zone_append(int argc, char **argv, struct command *cmd, struct plugin
 	if (cfg.fua)
 		control |= NVME_IO_FUA;
 
-	printf("sending zone append to %s namespace %d\n", devicename,
-		nvme_ns_get_nsid(ns));
-	err = nvme_zns_append(fd, nvme_ns_get_nsid(ns), cfg.zslba, nblocks,
+	err = nvme_zns_append(fd, cfg.namespace_id, cfg.zslba, nblocks,
 			      control, cfg.ref_tag, cfg.lbat, cfg.lbatm,
 			      cfg.data_size, buf, cfg.metadata_size, mbuf,
 			      &result);
@@ -744,8 +750,6 @@ free_data:
 close_dfd:
 	if (cfg.data)
 		close(dfd);
-close_ns:
-	nvme_free_ns(ns);
 close_fd:
 	close(fd);
 	return err;
