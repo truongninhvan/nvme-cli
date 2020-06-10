@@ -164,10 +164,10 @@ static int zns_mgmt_send(int argc, char **argv, struct command *cmd, struct plug
 			zsa, (uint64_t)cfg.zslba, cfg.namespace_id);
 	else
 		nvme_show_status(command, err);
-free:
-	free(command);
 close_fd:
 	close(fd);
+free:
+	free(command);
 	return nvme_status_to_errno(err, false);
 }
 
@@ -188,7 +188,7 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 		__u32	namespace_id;
 		bool	select_all;
 		__u8	zsa;
-		__u32   data_len;
+		__u64   data_len;
 		char   *file;
 	};
 
@@ -196,11 +196,11 @@ static int zone_mgmt_send(int argc, char **argv, struct command *cmd, struct plu
 	};
 
 	OPT_ARGS(opts) = {
-		OPT_UINT("namespace-id", 'n', &cfg.namespace_id,  namespace_id),
-		OPT_SUFFIX("start-lba",  's', &cfg.zslba,         zslba),
-		OPT_FLAG("select-all",   'a', &cfg.select_all,    select_all),
-		OPT_BYTE("zsa",          'z', &cfg.zsa,           zsa),
-		OPT_UINT("data-len",     'l', &cfg.data_len,     data_len),
+		OPT_UINT("namespace-id", 'n', &cfg.namespace_id, namespace_id),
+		OPT_SUFFIX("start-lba",  's', &cfg.zslba,        zslba),
+		OPT_FLAG("select-all",   'a', &cfg.select_all,   select_all),
+		OPT_BYTE("zsa",          'z', &cfg.zsa,          zsa),
+		OPT_SUFFIX("data-len",   'l', &cfg.data_len,     data_len),
 		OPT_FILE("data",         'd', &cfg.file,         data),
 		OPT_END()
 	};
@@ -393,13 +393,12 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 		"perform any special decoding of any returned data.";
 	const char *zslba = "starting lba of the zone";
 	const char *data_len = "received data buffer length";
-	const char *data = "optional file for saving data (default stdout)";
 	const char *zra = "Zone Receive Action";
 	const char *zrasf = "Zone Receive Action Specific field";
 	const char *zrass = "Enable Zone Receive Action Specific features";
 
 	enum nvme_print_flags flags;
-	int fd, ffd = STDOUT_FILENO, err = -1;
+	int fd, err = -1;
 	void *buf = NULL;
 
 	struct config {
@@ -409,7 +408,7 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 		__u16  zra;
 		__u16  zrasf;
 		bool   zrass;
-		__u32  data_len;
+		__u64  data_len;
 		char   *file;
 	};
 
@@ -420,8 +419,7 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 	OPT_ARGS(opts) = {
 		OPT_UINT("namespace-id", 'n', &cfg.namespace_id, namespace_id),
 		OPT_SUFFIX("start-lba",  's', &cfg.zslba,        zslba),
-		OPT_UINT("data-len",     'l', &cfg.data_len,     data_len),
-		OPT_FILE("data",         'd', &cfg.file,         data),
+		OPT_SUFFIX("data-len",   'l', &cfg.data_len,     data_len),
 		OPT_SHRT("zra",          'z', &cfg.zra,          zra),
 		OPT_SHRT("zrasf",        'a', &cfg.zrasf,        zrasf),
 		OPT_FLAG("zra-spec-feat",'f', &cfg.zrass,        zrass),
@@ -453,14 +451,6 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 		}
 	}
 
-	if (cfg.file) {
-		ffd = open(cfg.file, O_RDWR);
-		if (ffd < 0) {
-			perror(cfg.file);
-			goto free;
-		}
-	}
-
 	err = nvme_zns_mgmt_recv(fd, cfg.namespace_id, cfg.zslba, cfg.zra,
 		cfg.zrasf, cfg.zrass, cfg.data_len, buf);
 	if (!err) {
@@ -468,14 +458,13 @@ static int zone_mgmt_recv(int argc, char **argv, struct command *cmd, struct plu
 			cfg.zra, (uint64_t)cfg.zslba, cfg.namespace_id);
 		if (buf) {
 			if (flags & NVME_JSON_BINARY)
-				write(ffd, buf, cfg.data_len);
+				d_raw(buf, cfg.data_len);
 			else
 				d(buf, cfg.data_len, 16, 4);
 		}
 	} else
 		nvme_show_status("zone-mgmt-recv", err);
 
-free:
 	if (buf)
 		free(buf);
 close_fd:

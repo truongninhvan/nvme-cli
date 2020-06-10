@@ -226,9 +226,21 @@ void nvme_show_status(const char *prefix, int status)
 {
 	if (status < 0)
 		perror(prefix);
-	else
-		fprintf(stderr, "%s: nvme status: %s(%#x)\n", prefix,
-			nvme_status_to_string(status, false), status);
+	else {
+		char *msg;
+
+		if (asprintf(&msg, "%s: nvme status: %s(%#x)", prefix,
+			nvme_status_to_string(status, false), status) < 0)
+			fprintf(stderr, "%s: nvme status: %s(%#x)\n", prefix,
+				nvme_status_to_string(status, false), status);
+		else {
+			int tmp = strlen(prefix) + 2;
+			print_word_wrapped(msg, tmp, tmp);
+			fprintf(stderr, "\n");
+			free(msg);
+		}
+			
+	}
 }
 
 void nvme_print_object(struct json_object *j)
