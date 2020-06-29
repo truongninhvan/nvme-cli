@@ -28,6 +28,19 @@
 #define MAX_LOG_BUFF        4096
 #define DEFAULT_TEST_NAME   "Put the name of your test here"
 
+#define NVME_LOG_VENDOR_SPEC          0xC0
+#define TOSHIBA_NVME_LOG_VENDOR_SPEC  0xC0
+#define REALTEK_NVME_LOG_VENDOR_SPEC  0xFF
+
+#define NUM_VENDER_SUPPORT  3
+#define NUM_SMART_ATTRIBUTE 30
+#define VIRTIUM_VENDOR      0x10EC
+//#define TOSHIBA_VENDOR      0x1179
+//#define REALTEK_VENDOR      0x10EC
+#define VIRTIUM_TABLE       0
+//#define TOSHIBA_TABLE       1
+//#define REALTEK_TABLE       2
+
 static char vt_default_log_file_name[256];
 
 struct vtview_log_header {
@@ -38,12 +51,17 @@ struct vtview_log_header {
 	struct nvme_firmware_log_page   raw_fw;
 };
 
+struct vtview_vendor_specific_log {
+  __u8	log_data[512];
+};
+
 struct vtview_smart_log_entry {
 	char	path[256];
 	long int	time_stamp;
 	struct nvme_id_ns	raw_ns;
 	struct nvme_id_ctrl	raw_ctrl;
 	struct nvme_smart_log	raw_smart;
+	struct vtview_vendor_specific_log vt_vendor_specific_log_data;
 };
 
 struct vtview_save_log_settings {
@@ -53,6 +71,94 @@ struct vtview_save_log_settings {
 	const char*	test_name;
 };
 
+struct vtview_attribute_param {
+	bool show;
+	__u8 id;
+	char name[100];
+	char note[256];
+};
+
+static struct vtview_attribute_param vt_attr_name_map[NUM_VENDER_SUPPORT][NUM_SMART_ATTRIBUTE];
+
+static void vt_clear_attr_name_map()
+{
+	for (__u8 i = 0; i < NUM_VENDER_SUPPORT; i++) {
+		for (__u8 j = 0; j < NUM_SMART_ATTRIBUTE; j++) {
+			vt_attr_name_map[i][j].show = false;
+			vt_attr_name_map[i][j].id = 0;
+		}
+	}
+}
+
+static void vt_insert_attr_name_map(__u8 table, __u8 index, bool show, __u8 id, const char* name, const char* note)
+{
+	vt_attr_name_map[table][index].show = show;
+	vt_attr_name_map[table][index].id = id;
+	strcpy(vt_attr_name_map[table][index].name, name);
+	strcpy(vt_attr_name_map[table][index].note, note);
+}
+
+static void vt_init_attr_name_map()
+{
+	__u8 attr_index, table;
+	vt_clear_attr_name_map();
+	
+	//create virtium attr table
+	table = VIRTIUM_TABLE;
+	attr_index = 0;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0x01,	"Raw_data_error_rate",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0x05,	"Later_bad_block_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0x09,	"Power_on_hour_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0x0c,	"Power_cycle_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa0,	"Uncorrectable_sector_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa1,	"Number_of_valid_spare_block",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa3,	"Number_of_initial_invalid_block",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa4,	"Total_erase_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa5,	"Max_erase_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa6,	"Min_erase_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa7,	"Average_erase_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xa8,	"Max_PE_cycle",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xb1,	"Total_wear-leveling_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xb5,	"Program_fail_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xb6,	"Erase_fail_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xbb,	"Reported_uncorrectable_error",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xc0,	"Power-off_retract_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xc2,	"Enclosure_temperature",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xc3,	"Cumulative_corrected_ecc",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xc4,	"Realloction_event_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xc5,	"Current_pending_sector_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xc6,	"Total_32MB_written_to_NAND",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xc7,	"Ultra_DMA_CRC_error_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xe8,	"Available_spare_space",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xf1,	"Write_life_time",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xf2,	"Read_life_time",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xf8,	"Percent_life_timing_remaining",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	false,	0xf9,	"Reserved_block_count",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xfa,	"Total_32MB_written_to_NAND_SLC",	"");	attr_index++;
+	vt_insert_attr_name_map(table,	attr_index,	true,		0xfb,	"Total_32MB_written_to_NAND_TLC",	"");	attr_index++;
+}
+
+static bool vt_kookup_Attr_name(__u8 id, char* name, __u16 vendor)
+{
+	bool status = false;
+	__u8 table = 0;
+	if (vendor == VIRTIUM_VENDOR) table = VIRTIUM_TABLE;
+	//else if (vendor == TOSHIBA_VENDOR) table = TOSHIBA_TABLE;
+	//else if (vendor == REALTEK_VENDOR) table = REALTEK_TABLE;
+	
+	for (__u8 i = 0; i < NUM_SMART_ATTRIBUTE; i++) {
+		if (true == vt_attr_name_map[table][i].show) {
+			if (id == vt_attr_name_map[table][i].id) {
+				status = true;
+				strcpy(name, vt_attr_name_map[table][i].name);
+				break;
+			}
+		}
+	}
+	
+	return status;
+}
+
 static long double int128_to_double(__u8 *data)
 {
 	int i;
@@ -61,6 +167,18 @@ static long double int128_to_double(__u8 *data)
 	for (i = 0; i < 16; i++) {
 		result *= 256;
 		result += data[15 - i];
+	}
+	return result;
+}
+
+static long long int int48_to_int(__u8 *data)
+{
+	int i;
+	long long int result = 0;
+
+	for (i = 0; i < 6; i++) {
+		result *= 256;
+		result += data[5 - i];
 	}
 	return result;
 }
@@ -114,6 +232,20 @@ static void vt_generate_vtview_log_file_name(char* fname)
 	strcat(fname, temp);
 	snprintf(temp, sizeof(temp), ".txt");
 	strcat(fname, temp);
+}
+
+static bool vt_is_vendor_support(int vid)
+{
+	int supported = false;
+	switch (vid) {
+	case VIRTIUM_VENDOR:
+	//case TOSHIBA_VENDOR:
+	//case REALTEK_VENDOR:
+		supported = true;
+		break;
+	}
+	
+	return supported;
 }
 
 static void vt_convert_smart_data_to_human_readable_format(struct vtview_smart_log_entry *smart, char *text)
@@ -196,8 +328,24 @@ static void vt_convert_smart_data_to_human_readable_format(struct vtview_smart_l
 	snprintf(tempbuff, sizeof(tempbuff), "Thermal_Management_T2_Total_Time;%u;", le32_to_cpu(smart->raw_smart.thm_temp2_total_time));
 	strcat(text, tempbuff);
 
-	snprintf(tempbuff, sizeof(tempbuff), "NandWrites;%d;\n", 0);
+	snprintf(tempbuff, sizeof(tempbuff), "NandWrites;%d;", 0);
 	strcat(text, tempbuff);
+	
+	//Vendor specific log
+	if (vt_is_vendor_support(smart->raw_ctrl.vid)) {
+		int pos = 2;
+		char str[256] = "";
+		for(i = 0; i < NUM_SMART_ATTRIBUTE; i++) {
+			__u8 id = smart->vt_vendor_specific_log_data.log_data[pos];
+			if (true == vt_kookup_Attr_name(id, str, smart->raw_ctrl.vid)) {
+				snprintf(tempbuff, sizeof(tempbuff), "%s;%lld;", str, int48_to_int(&smart->vt_vendor_specific_log_data.log_data[pos+5]));
+				strcat(text, tempbuff);
+			}
+			pos += 12;
+		}
+	}
+	
+	strcat(text, "\n");
 
 	setlocale(LC_ALL, templocale);
 	free(templocale);
@@ -268,6 +416,56 @@ static void vt_process_string(char *str, const size_t size)
 	}
 }
 
+static void vt_dump_hex_data(const unsigned char *pbuff, size_t pbuffsize) {
+
+	char textbuf[33];
+	unsigned long int i, j;
+
+	textbuf[32] = '\0';
+	printf("[%08X] ", 0);
+	for (i = 0; i < pbuffsize; i++) {
+		printf("%02X ", pbuff[i]);
+
+		if (pbuff[i] >= ' ' && pbuff[i] <= '~') 
+			textbuf[i % 32] = pbuff[i];
+		else 
+			textbuf[i % 32] = '.';
+
+		if ((((i + 1) % 8) == 0) || ((i + 1) == pbuffsize)) {
+			printf(" ");
+			if ((i + 1) % 32 == 0) {
+				printf(" %s\n", textbuf);
+				if((i + 1) != pbuffsize)
+				    printf("[%08lX] ", (i + 1));
+			} 
+			else if (i + 1 == pbuffsize) {
+				textbuf[(i + 1) % 32] = '\0';
+				if(((i + 1) % 8) == 0)
+					printf(" ");
+
+				for (j = ((i + 1) % 32); j < 32; j++) {
+					printf("   ");
+					if(((j + 1) % 8) == 0)
+						printf(" ");
+				}
+
+				printf("%s\n", textbuf);
+			}
+		}
+	}
+}
+
+static int vt_vendor_specific_log_data(int fd, struct vtview_smart_log_entry *smart)
+{
+	int err = -1;
+	if (VIRTIUM_VENDOR == smart->raw_ctrl.vid) {
+		memset(smart->vt_vendor_specific_log_data.log_data, 0, 512);
+		err = nvme_get_log(fd, NVME_NSID_ALL, REALTEK_NVME_LOG_VENDOR_SPEC, false, sizeof(smart->vt_vendor_specific_log_data.log_data), smart->vt_vendor_specific_log_data.log_data);
+	}
+
+	return err;
+}
+
 static int vt_add_entry_to_log(const int fd, const char *path, const struct vtview_save_log_settings *cfg)
 {
 	struct vtview_smart_log_entry smart;
@@ -306,6 +504,13 @@ static int vt_add_entry_to_log(const int fd, const char *path, const struct vtvi
 	if (ret) {
 		printf("Cannot read device SMART log\n");
 		return -1;
+	}
+  
+	if (vt_is_vendor_support(smart.raw_ctrl.vid)) {
+		ret = vt_vendor_specific_log_data(fd, &smart);
+		if (ret) {
+			printf("Cannot read device vendor specific log data\n");
+		}
 	}
 
 	vt_process_string(smart.raw_ctrl.sn, sizeof(smart.raw_ctrl.sn));
@@ -467,45 +672,6 @@ static void vt_build_power_state_descriptor(const struct nvme_id_ctrl *ctrl)
 
 	printf("    \"}\n}\n");
 
-}
-
-static void vt_dump_hex_data(const unsigned char *pbuff, size_t pbuffsize) {
-
-	char textbuf[33];
-	unsigned long int i, j;
-
-	textbuf[32] = '\0';
-	printf("[%08X] ", 0);
-	for (i = 0; i < pbuffsize; i++) {
-		printf("%02X ", pbuff[i]);
-
-		if (pbuff[i] >= ' ' && pbuff[i] <= '~') 
-			textbuf[i % 32] = pbuff[i];
-		else 
-			textbuf[i % 32] = '.';
-
-		if ((((i + 1) % 8) == 0) || ((i + 1) == pbuffsize)) {
-			printf(" ");
-			if ((i + 1) % 32 == 0) {
-				printf(" %s\n", textbuf);
-				if((i + 1) != pbuffsize)
-				    printf("[%08lX] ", (i + 1));
-			} 
-			else if (i + 1 == pbuffsize) {
-				textbuf[(i + 1) % 32] = '\0';
-				if(((i + 1) % 8) == 0)
-					printf(" ");
-
-				for (j = ((i + 1) % 32); j < 32; j++) {
-					printf("   ");
-					if(((j + 1) % 8) == 0)
-						printf(" ");
-				}
-
-				printf("%s\n", textbuf);
-			}
-		}
-	}
 }
 
 static void vt_parse_detail_identify(const struct nvme_id_ctrl *ctrl)
@@ -988,6 +1154,7 @@ static int vt_save_smart_to_vtview_log(int argc, char **argv, struct command *cm
 
 	fflush(stdout);
 
+	vt_init_attr_name_map();
 	while (1) {
 		cur_time = time(NULL);
 		if(cur_time >= end_time)
